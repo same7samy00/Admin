@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نقطة البيع - شيخ العرب</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Styles for the new scanner source modal (copied from inventory.html) */
+        .scanner-source-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1002; /* Above other modals if any */
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .scanner-source-modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .scanner-source-modal {
+            background-color: #fff;
+            color: var(--text-dark);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 450px;
+            width: 90%;
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+            position: relative; /* لزر الإغلاق */
+        }
+        .scanner-source-modal-overlay.show .scanner-source-modal {
+            transform: scale(1);
+        }
+        .scanner-source-modal h3 {
+            margin-top: 0;
+            margin-bottom: 25px;
+            font-size: 1.5em;
+        }
+        .scanner-source-modal .modal-options {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .scanner-source-modal .modal-options button {
+            width: 100%;
+            font-size: 1.1em;
+            padding: 15px;
+        }
+        .scanner-source-modal .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            font-size: 1.8em;
+            color: var(--secondary-color);
+            cursor: pointer;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .scanner-source-modal .close-btn:hover {
+            background-color: var(--bg-light);
+        }
+    </style>
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="logo" id="storeLogo">شيخ <span>العرب</span></div>
+        <ul class="nav-list">
+            <li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="ri-dashboard-line"></i><span>الصفحة الرئيسية</span></a></li>
+            <li class="nav-item"><a href="inventory.html" class="nav-link"><i class="ri-box-3-line"></i><span>إدارة المخزون</span></a></li>
+            <li class="nav-item"><a href="pos.html" class="nav-link active"><i class="ri-shopping-cart-line"></i><span>نقطة البيع</span></a></li>
+            <li class="nav-item"><a href="sales_history.html" class="nav-link" id="salesHistoryLink"><i class="ri-history-line"></i><span>سجل المبيعات</span></a></li>
+            <li class="nav-item"><a href="settings.html" class="nav-link" id="settingsLink"><i class="ri-settings-3-line"></i><span>الإعدادات</span></a></li>
+            <li class="nav-item logout"><a href="#" id="logoutButton" class="nav-link logout-btn"><i class="ri-logout-box-line"></i><span>تسجيل الخروج</span></a></li>
+        </ul>
+    </aside>
+
+    <main class="main-content">
+        <div class="content-wrapper pos-wrapper">
+            <div class="page-header">
+                <h1>نقطة البيع</h1>
+            </div>
+
+            <div class="pos-grid">
+                <div class="pos-left">
+                    <div class="search-product-section">
+                        <div class="input-group">
+                            <input type="text" id="productSearchInput" placeholder="بحث باسم المنتج أو الباركود..." autocomplete="off">
+                            <button class="btn btn-icon btn-secondary" id="openScannerSourceModalBtn" title="مسح منتج"><i class="ri-qr-code-line"></i></button>
+                        </div>
+                        <div id="searchResults" class="search-results-dropdown">
+                            </div>
+                    </div>
+
+                    <div class="cart-section">
+                        <h2>المنتجات في الفاتورة</h2>
+                        <table class="data-table cart-table">
+                            <thead>
+                                <tr>
+                                    <th>المنتج</th>
+                                    <th>الكمية</th>
+                                    <th>السعر</th>
+                                    <th>الإجمالي</th>
+                                    <th>الإجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cartTableBody">
+                                <tr><td colspan="5" class="table-placeholder">لا توجد منتجات في الفاتورة.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="pos-right">
+                    <div class="invoice-summary">
+                        <h2>ملخص الفاتورة</h2>
+                        <div class="summary-item">
+                            <span>الإجمالي الفرعي:</span>
+                            <span id="subTotal">0.00 جنيه</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="discount">الخصم (%)</label>
+                            <input type="number" id="discount" value="0" min="0" max="100" step="0.01">
+                        </div>
+                        <div class="summary-item total">
+                            <span>الإجمالي الكلي:</span>
+                            <span id="grandTotal">0.00 جنيه</span>
+                        </div>
+                    </div>
+
+                    <div class="payment-details">
+                        <h3>الدفع والباقي</h3>
+                        <div class="input-group">
+                            <label for="amountPaid">المبلغ المدفوع</label>
+                            <input type="number" id="amountPaid" value="0" min="0" step="0.01">
+                        </div>
+                        <div class="summary-item change">
+                            <span>الباقي للعميل:</span>
+                            <span id="changeDue">0.00 جنيه</span>
+                        </div>
+                    </div>
+
+                    <div class="payment-options" style="display:none;">
+                        <h3>طريقة الدفع</h3>
+                        <select id="paymentMethod" class="form-control">
+                            <option value="cash">نقداً</option>
+                        </select>
+                    </div>
+
+                    <div class="pos-actions">
+                        <button class="btn btn-primary" id="completeSaleBtn"><i class="ri-check-line"></i> إتمام البيع</button>
+                        <button class="btn btn-secondary" id="printInvoiceBtn"><i class="ri-printer-line"></i> طباعة الفاتورة</button>
+                        <button class="btn btn-danger" id="cancelSaleBtn"><i class="ri-close-line"></i> إلغاء الفاتورة</button>
+                        <a href="#" id="viewSalesHistoryBtn" class="btn btn-info"><i class="ri-history-line"></i> سجل المبيعات</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="notification-container"></div>
+    <div class="scanner-source-modal-overlay" id="scannerSourceModalOverlay">
+        <div class="scanner-source-modal">
+            <button class="close-btn" id="closeScannerSourceModal">&times;</button>
+            <h3>اختر مصدر المسح</h3>
+            <div class="modal-options">
+                <button class="btn btn-primary" id="scanFromThisDeviceBtn">
+                    <i class="ri-qr-code-line"></i> مسح من هذا الجهاز
+                </button>
+                <button class="btn btn-secondary" id="scanFromOtherDeviceBtn">
+                    <i class="ri-smartphone-line"></i> مسح من الهاتف/جهاز آخر
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { getFirestore, collection, getDocs, doc, updateDoc, addDoc, writeBatch, getDoc } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
+        import { db, showNotification, showConfirmation, listenToScannerSession, requestScan, getSettings, loadSettings, canAccessSalesHistory, canAccessSettings, SCANNER_SESSION_ID } from './shared.js'; 
+
+        const productSearchInput = document.getElementById('productSearchInput');
+        const searchResultsDiv = document.getElementById('searchResults');
+        const cartTableBody = document.getElementById('cartTableBody');
+        const subTotalSpan = document.getElementById('subTotal');
+        const grandTotalSpan = document.getElementById('grandTotal');
+        const discountInput = document.getElementById('discount');
+        const amountPaidInput = document.getElementById('amountPaid');
+        const changeDueSpan = document.getElementById('changeDue');
+        const completeSaleBtn = document.getElementById('completeSaleBtn');
+        const cancelSaleBtn = document.getElementById('cancelSaleBtn');
+        const openScannerSourceModalBtn = document.getElementById('openScannerSourceModalBtn'); // تغيير اسم الزر
+        const printInvoiceBtn = document.getElementById('printInvoiceBtn');
+        const viewSalesHistoryBtn = document.getElementById('viewSalesHistoryBtn');
+        const salesHistoryLink = document.getElementById('salesHistoryLink');
+        const settingsLink = document.getElementById('settingsLink');
+
+        // عناصر المودال الجديدة
+        const scannerSourceModalOverlay = document.getElementById('scannerSourceModalOverlay');
+        const closeScannerSourceModal = document.getElementById('closeScannerSourceModal');
+        const scanFromThisDeviceBtn = document.getElementById('scanFromThisDeviceBtn');
+        const scanFromOtherDeviceBtn = document.getElementById('scanFromOtherDeviceBtn');
+
+        let allProducts = [];
+        let cart = [];
+        let invoiceSettings = {};
+
+        async function fetchAllProducts() {
+            try {
+                const productQuerySnapshot = await getDocs(collection(db, "products"));
+                allProducts = productQuerySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                //console.log("Fetched products:", allProducts); // للمساعدة في التشخيص
+            } catch (e) {
+                console.error("Error fetching products:", e);
+                showNotification("خطأ في تحميل المنتجات.", "error");
+            }
+        }
+
+        async function loadInvoiceSettings() {
+            // تأكد من أن getSettings() قد حملت البيانات بالفعل (تعتمد على loadSettings في shared.js)
+            invoiceSettings = await getSettings(); 
+            //console.log("Invoice settings loaded:", invoiceSettings); // للمساعدة في التشخيص
+        }
+
+        function displaySearchResults(query) {
+            searchResultsDiv.innerHTML = '';
+            searchResultsDiv.style.display = 'none';
+
+            if (query.length < 2) return;
+
+            const filtered = allProducts.filter(p =>
+                (p.name && p.name.toLowerCase().includes(query.toLowerCase())) ||
+                (p.barcode && p.barcode.toLowerCase().includes(query.toLowerCase()))
+            ).slice(0, 10);
+
+            if (filtered.length === 0) {
+                searchResultsDiv.innerHTML = '<div class="search-result-item no-results">لا توجد نتائج مطابقة</div>';
+                searchResultsDiv.style.display = 'block';
+                return;
+            }
+
+            filtered.forEach(product => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'search-result-item';
+                itemDiv.textContent = `${product.name} (${product.barcode || 'لا يوجد كود'}) - ${parseFloat(product.pricePerUnit || 0).toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}`;
+                itemDiv.addEventListener('click', () => {
+                    addProductToCart(product);
+                    productSearchInput.value = '';
+                    searchResultsDiv.innerHTML = '';
+                    searchResultsDiv.style.display = 'none';
+                });
+                searchResultsDiv.appendChild(itemDiv);
+            });
+            searchResultsDiv.style.display = 'block';
+        }
+
+        function addProductToCart(product, quantityToAdd = 1) {
+            const existingProductIndex = cart.findIndex(item => item.id === product.id);
+            const availableStock = parseFloat(product.quantity || 0);
+
+            if (existingProductIndex > -1) {
+                const currentCartQuantity = parseFloat(cart[existingProductIndex].quantity);
+                if (currentCartQuantity + quantityToAdd > availableStock) {
+                    showNotification(`الكمية المطلوبة من ${product.name} تتجاوز المتوفر. المتوفر: ${availableStock} ${product.unit}`, 'warning', 5000);
+                    return;
+                }
+                cart[existingProductIndex].quantity = currentCartQuantity + quantityToAdd;
+            } else {
+                if (quantityToAdd > availableStock) {
+                    showNotification(`الكمية المطلوبة من ${product.name} تتجاوز المتوفر. المتوفر: ${product.quantity} ${product.unit}`, 'warning', 5000);
+                    return;
+                }
+                cart.push({ ...product, quantity: quantityToAdd });
+            }
+            renderCart();
+            showNotification(`${product.name} أضيف إلى الفاتورة.`, 'success', 2000);
+        }
+
+        function renderCart() {
+            cartTableBody.innerHTML = '';
+            if (cart.length === 0) {
+                cartTableBody.innerHTML = '<tr><td colspan="5" class="table-placeholder">لا توجد منتجات في الفاتورة.</td></tr>';
+            } else {
+                cart.forEach(item => {
+                    const row = cartTableBody.insertRow();
+                    const itemTotal = parseFloat(item.quantity || 0) * parseFloat(item.pricePerUnit || 0);
+                    row.innerHTML = `
+                        <td>${item.name}</td>
+                        <td>
+                            <input type="number" class="cart-quantity-input" data-id="${item.id}" value="${item.quantity}" min="0.001" step="any">
+                        </td>
+                        <td>${parseFloat(item.pricePerUnit || 0).toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}</td>
+                        <td>${itemTotal.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}</td>
+                        <td class="actions">
+                            <button title="إزالة" class="action-btn remove-from-cart-btn" data-id="${item.id}"><i class="ri-delete-bin-line"></i></button>
+                        </td>
+                    `;
+                });
+            }
+            updateTotals();
+        }
+
+        function updateTotals() {
+            let subTotal = cart.reduce((sum, item) => sum + (parseFloat(item.quantity || 0) * parseFloat(item.pricePerUnit || 0)), 0);
+            
+            let discountPercentage = parseFloat(discountInput.value) || 0;
+            if (discountPercentage < 0) discountPercentage = 0;
+            if (discountPercentage > 100) discountPercentage = 100;
+            discountInput.value = discountPercentage;
+
+            const discountAmount = subTotal * (discountPercentage / 100);
+            let grandTotal = subTotal - discountAmount;
+            if (grandTotal < 0) grandTotal = 0;
+
+            let amountPaid = parseFloat(amountPaidInput.value) || 0;
+            if (amountPaid < 0) amountPaid = 0;
+            amountPaidInput.value = amountPaid;
+
+            let changeDue = amountPaid - grandTotal;
+
+            subTotalSpan.textContent = subTotal.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' });
+            grandTotalSpan.textContent = grandTotal.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' });
+            changeDueSpan.textContent = changeDue.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' });
+        }
+
+        function removeFromCart(productId) {
+            cart = cart.filter(item => item.id !== productId);
+            renderCart();
+            showNotification('تمت إزالة المنتج من الفاتورة.', 'info', 2000);
+        }
+
+        function updateCartItemQuantity(productId, newQuantity) {
+            const itemIndex = cart.findIndex(item => item.id === productId);
+            if (itemIndex > -1) {
+                const productInStock = allProducts.find(p => p.id === productId);
+                const availableStock = parseFloat(productInStock.quantity || 0);
+
+                if (newQuantity > availableStock) {
+                     showNotification(`الكمية المطلوبة من ${productInStock.name} تتجاوز المتوفر. المتوفر: ${availableStock} ${productInStock.unit}`, 'warning', 5000);
+                     renderCart();
+                     return;
+                }
+                cart[itemIndex].quantity = newQuantity;
+                renderCart();
+            }
+        }
+
+        async function completeSale() {
+            if (cart.length === 0) {
+                showNotification("الفاتورة فارغة. يرجى إضافة منتجات.", "warning");
+                return;
+            }
+
+            const grandTotalValue = parseFloat(grandTotalSpan.textContent.replace(/[^\d.-]/g, ''));
+            const amountPaidValue = parseFloat(amountPaidInput.value);
+
+            if (amountPaidValue < grandTotalValue) {
+                showNotification(`المبلغ المدفوع غير كافٍ. المبلغ المطلوب: ${grandTotalValue.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}`, 'warning');
+                return;
+            }
+
+
+            showConfirmation("هل أنت متأكد من إتمام عملية البيع؟", async () => {
+                completeSaleBtn.disabled = true;
+                completeSaleBtn.textContent = 'جاري المعالجة...';
+
+                const batch = writeBatch(db);
+                let hasStockIssue = false;
+
+                for (const item of cart) {
+                    const productRef = doc(db, "products", item.id);
+                    const productDoc = await getDoc(productRef);
+                    if (!productDoc.exists()) {
+                        showNotification(`المنتج ${item.name} لم يعد موجوداً في المخزون.`, "error");
+                        hasStockIssue = true;
+                        break;
+                    }
+                    const currentStock = parseFloat(productDoc.data().quantity || 0);
+                    if (currentStock < parseFloat(item.quantity || 0)) {
+                        showNotification(`الكمية المتوفرة من ${item.name} غير كافية. المتوفر: ${currentStock} ${item.unit}`, 'warning', 5000);
+                        hasStockIssue = true;
+                        break;
+                    }
+                    
+                    const newQuantity = currentStock - parseFloat(item.quantity || 0);
+                    let newStatus = productDoc.data().status;
+                    if (newQuantity <= 0) newStatus = 'نفد المخزون';
+                    else if (newQuantity > 0 && newQuantity <= 10) newStatus = 'قليل المخزون';
+                    else newStatus = 'متوفر';
+
+                    batch.update(productRef, {
+                        quantity: newQuantity,
+                        status: newStatus,
+                        updatedAt: new Date()
+                    });
+                }
+
+                if (hasStockIssue) {
+                    completeSaleBtn.disabled = false;
+                    completeSaleBtn.textContent = 'إتمام البيع';
+                    return;
+                }
+
+                try {
+                    await addDoc(collection(db, "sales"), {
+                        products: cart.map(p => ({
+                            id: p.id,
+                            name: p.name,
+                            barcode: p.barcode,
+                            category: p.category,
+                            unit: p.unit,
+                            quantity: parseFloat(p.quantity || 0),
+                            pricePerUnit: parseFloat(p.pricePerUnit || 0),
+                            itemTotal: parseFloat(p.quantity || 0) * parseFloat(p.pricePerUnit || 0)
+                        })),
+                        subTotal: parseFloat(subTotalSpan.textContent.replace(/[^\d.-]/g, '')),
+                        discount: parseFloat(discountInput.value),
+                        totalAmount: grandTotalValue,
+                        amountPaid: amountPaidValue,
+                        changeDue: parseFloat(changeDueSpan.textContent.replace(/[^\d.-]/g, '')),
+                        paymentMethod: 'cash', // Always cash as option is removed
+                        saleDate: new Date(),
+                    });
+
+                    await batch.commit();
+
+                    showNotification("تم إتمام عملية البيع بنجاح!", "success");
+                    printInvoice();
+                    cart = [];
+                    renderCart();
+                    amountPaidInput.value = 0;
+                    discountInput.value = 0;
+                    await fetchAllProducts();
+                } catch (e) {
+                    console.error("Error completing sale:", e);
+                    showNotification("فشل إتمام عملية البيع.", "error");
+                } finally {
+                    completeSaleBtn.disabled = false;
+                    completeSaleBtn.textContent = 'إتمام البيع';
+                }
+            });
+        }
+
+        function cancelSale() {
+            showConfirmation("هل أنت متأكد من إلغاء الفاتورة؟ سيتم مسح جميع المنتجات.", () => {
+                cart = [];
+                renderCart();
+                amountPaidInput.value = 0;
+                discountInput.value = 0;
+                showNotification("تم إلغاء الفاتورة.", "info");
+            });
+        }
+
+        function printInvoice() {
+            if (cart.length === 0) {
+                showNotification("لا توجد منتجات لطباعتها في الفاتورة.", "warning");
+                return;
+            }
+
+            const invoiceWindow = window.open('', '_blank');
+            invoiceWindow.document.write('<html><head><title>فاتورة شيخ العرب</title>');
+            invoiceWindow.document.write('<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">');
+            invoiceWindow.document.write('<style>');
+            invoiceWindow.document.write(`
+                body { font-family: 'Cairo', sans-serif; margin: 20px; color: #333; direction: rtl; font-size: 10pt; }
+                .invoice-header { text-align: center; margin-bottom: 20px; }
+                .invoice-header h2 { margin: 0; font-size: 1.8em; color: #2C3E50; }
+                .invoice-header p { margin: 5px 0; font-size: 0.9em; }
+                .invoice-details { margin-bottom: 20px; font-size: 0.9em; }
+                .invoice-details div { display: flex; justify-content: space-between; margin-bottom: 5px; }
+                .invoice-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                .invoice-table th, .invoice-table td { border: 1px solid #ddd; padding: 8px; text-align: right; }
+                .invoice-table th { background-color: #f2f2f2; }
+                .invoice-summary-print { border-top: 2px solid #ccc; padding-top: 15px; }
+                .invoice-summary-print div { display: flex; justify-content: space-between; margin-bottom: 5px; }
+                .invoice-summary-print .total-amount { font-weight: bold; font-size: 1.1em; }
+                .thank-you { text-align: center; margin-top: 30px; font-size: 1em; color: #555; }
+            `);
+            invoiceWindow.document.write('</style></head><body>');
+
+            invoiceWindow.document.write('<div class="invoice-header">');
+            invoiceWindow.document.write(`<h2>${invoiceSettings.storeName || 'شيخ العرب'}</h2>`);
+            invoiceWindow.document.write(`<p>${invoiceSettings.invoiceAddress || 'عنوان المتجر'}</p>`);
+            invoiceWindow.document.write(`<p>الهاتف: ${invoiceSettings.invoicePhone || 'رقم الهاتف'}</p>`);
+            invoiceWindow.document.write(`<p>التاريخ: ${new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}</p>`);
+            invoiceWindow.document.write(`</div>`);
+
+            invoiceWindow.document.write('<table class="invoice-table">');
+            invoiceWindow.document.write('<thead><tr><th>المنتج</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead><tbody>');
+            
+            cart.forEach(item => {
+                const itemTotal = parseFloat(item.quantity || 0) * parseFloat(item.pricePerUnit || 0);
+                invoiceWindow.document.write(`
+                    <tr>
+                        <td>${item.name}</td>
+                        <td>${item.quantity} ${item.unit}</td>
+                        <td>${parseFloat(item.pricePerUnit || 0).toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}</td>
+                        <td>${itemTotal.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}</td>
+                    </tr>
+                `);
+            });
+            invoiceWindow.document.write('</tbody></table>');
+
+            invoiceWindow.document.write('<div class="invoice-summary-print">');
+            invoiceWindow.document.write(`<div><span>الإجمالي الفرعي:</span><span>${subTotalSpan.textContent}</span></div>`);
+            invoiceWindow.document.write(`<div><span>الخصم (${discountInput.value}%):</span><span>${(parseFloat(subTotalSpan.textContent.replace(/[^\d.-]/g, '')) * (parseFloat(discountInput.value)/100)).toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}</span></div>`);
+            invoiceWindow.document.write(`<div class="total-amount"><span>الإجمالي الكلي:</span><span>${grandTotalSpan.textContent}</span></div>`);
+            invoiceWindow.document.write(`<div><span>المبلغ المدفوع:</span><span>${parseFloat(amountPaidInput.value).toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}</span></div>`);
+            invoiceWindow.document.write(`<div><span>الباقي للعميل:</span><span>${changeDueSpan.textContent}</span></div>`);
+            invoiceWindow.document.write(`<div><span>طريقة الدفع:</span><span>نقداً</span></div>`);
+            invoiceWindow.document.write('</div>');
+
+            invoiceWindow.document.write(`<p class="thank-you">${invoiceSettings.invoiceThankYou || 'شكراً لتسوقكم من شيخ العرب!'}</p>`);
+            invoiceWindow.document.write('</body></html>');
+            invoiceWindow.document.close();
+            invoiceWindow.print();
+        }
+
+        productSearchInput.addEventListener('input', (e) => displaySearchResults(e.target.value));
+        document.addEventListener('click', (e) => {
+            if (!searchResultsDiv.contains(e.target) && e.target !== productSearchInput) {
+                searchResultsDiv.style.display = 'none';
+            }
+        });
+
+        openScannerSourceModalBtn.addEventListener('click', () => { // استخدام الزر الجديد
+            scannerSourceModalOverlay.classList.add('show');
+        });
+        
+        // إغلاق المودال من زر الإغلاق
+        closeScannerSourceModal.addEventListener('click', () => {
+            scannerSourceModalOverlay.classList.remove('show');
+        });
+
+        // حدث النقر للمسح من هذا الجهاز
+        scanFromThisDeviceBtn.addEventListener('click', () => {
+            scannerSourceModalOverlay.classList.remove('show'); // إغلاق المودال
+            requestScan('pos_scan'); // إرسال طلب المسح لـ Firestore
+            // فتح نافذة الماسح على نفس الجهاز
+            window.open('scanner_only.html', '_blank', 'width=450,height=550,toolbar=no,location=no,status=no,menubar=no,scrollbars=no,resizable=yes');
+        });
+
+        // حدث النقر للمسح من الهاتف/جهاز آخر
+        scanFromOtherDeviceBtn.addEventListener('click', () => {
+            scannerSourceModalOverlay.classList.remove('show'); // إغلاق المودال
+            requestScan('pos_scan'); // إرسال طلب المسح لـ Firestore
+            const scannerLink = `${window.location.origin}/scanner_only.html?sessionId=${SCANNER_SESSION_ID}`; // رابط الماسح مع معرف الجلسة
+            showNotification(`
+                **الماسح جاهز!** يرجى فتح هذا الرابط على الهاتف أو الجهاز الآخر:
+                <br>
+                <a href="${scannerLink}" target="_blank" style="color: yellow; text-decoration: underline;">${scannerLink}</a>
+                <br>
+                ثم قم بالمسح.
+            `, "info", 10000);
+            console.log("Scanner URL for other device:", scannerLink);
+        });
+
+        // الاستماع لنتائج المسح من Firestore
+        listenToScannerSession((scannedValue, purpose) => {
+            if (purpose === 'pos_scan' && scannedValue) {
+                productSearchInput.value = scannedValue;
+                showNotification(`تم مسح الباركود: ${scannedValue}`, 'success', 1500);
+
+                const product = allProducts.find(p => p.barcode === scannedValue);
+                if (product) {
+                    addProductToCart(product);
+                    productSearchInput.value = '';
+                    searchResultsDiv.innerHTML = '';
+                    searchResultsDiv.style.display = 'none';
+                } else {
+                    showNotification("المنتج غير موجود في المخزون.", "error");
+                }
+            }
+        });
+
+        cartTableBody.addEventListener('click', (e) => {
+            const removeBtn = e.target.closest('.remove-from-cart-btn');
+            if (removeBtn) {
+                const productId = removeBtn.dataset.id;
+                removeFromCart(productId);
+            }
+        });
+
+        cartTableBody.addEventListener('change', (e) => {
+            if (e.target.classList.contains('cart-quantity-input')) {
+                const productId = e.target.dataset.id;
+                let newQuantity = parseFloat(e.target.value);
+                if (isNaN(newQuantity) || newQuantity < 0.001) {
+                    showNotification("يرجى إدخال كمية صحيحة أكبر من صفر.", "warning");
+                    e.target.value = cart.find(item => item.id === productId).quantity;
+                    return;
+                }
+                updateCartItemQuantity(productId, newQuantity);
+            }
+        });
+
+        discountInput.addEventListener('input', updateTotals);
+        amountPaidInput.addEventListener('input', updateTotals);
+
+        completeSaleBtn.addEventListener('click', completeSale);
+        cancelSaleBtn.addEventListener('click', cancelSale);
+        printInvoiceBtn.addEventListener('click', printInvoice);
+        
+        viewSalesHistoryBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const settings = getSettings();
+            const salesHistoryPassword = settings.salesHistoryPassword;
+            if (!canAccessSalesHistory()) {
+                showNotification("ليس لديك صلاحية للدخول إلى سجل المبيعات.", "error");
+                return;
+            }
+            const password = prompt("الرجاء إدخال كلمة المرور لعرض سجل المبيعات:");
+            if (password === salesHistoryPassword) {
+                window.location.href = 'sales_history.html';
+            } else if (password !== null) {
+                showNotification("كلمة المرور غير صحيحة.", "error");
+            }
+        });
+
+        function updateNavigationPermissions() {
+            if (!canAccessSalesHistory()) {
+                salesHistoryLink.style.display = 'none';
+            } else {
+                salesHistoryLink.style.display = '';
+            }
+            if (!canAccessSettings()) {
+                settingsLink.style.display = 'none';
+            } else {
+                settingsLink.style.display = '';
+            }
+        }
+
+        // ملاحظة: يتم استدعاء loadSettings() في نهاية DOMContentLoaded
+        // listenToScannerSession يتم استدعاؤها في نهاية DOMContentLoaded
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSettings().then(() => { // انتظر تحميل الإعدادات لضمان عمل getSettings() بشكل صحيح
+                fetchAllProducts();
+                loadInvoiceSettings();
+                updateNavigationPermissions();
+                listenToScannerSession(() => {}); // ابدأ الاستماع لجلسة الماسح الضوئي
+            });
+        });
+
+        document.getElementById('logoutButton').addEventListener('click', () => {
+            showNotification('تم تسجيل الخروج بنجاح!', 'success');
+        });
+    </script>
+</body>
+</html>
