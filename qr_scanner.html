@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ماسح QR دائم - شيخ العرب</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         body {
@@ -17,13 +18,13 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100vh;
-            overflow: hidden;
+            min-height: 100vh;
+            overflow: hidden; /* لمنع ظهور أشرطة التمرير */
         }
         #reader {
             width: 90vw;
             max-width: 400px;
-            aspect-ratio: 1/1;
+            aspect-ratio: 1/1; /* للحفاظ على نسبة العرض إلى الارتفاع */
             border: 5px solid rgba(255, 255, 255, 0.2);
             border-radius: 24px;
             overflow: hidden;
@@ -32,16 +33,16 @@
         .status-message {
             font-size: 1.2em;
             font-weight: 600;
-            color: #4CAF50; /* Green for ready */
+            color: #4CAF50; /* أخضر للإشارة للجاهزية */
         }
         .scanned-value {
             margin-top: 15px;
             font-size: 1.1em;
-            color: #03A9F4; /* Blue for scanned value */
-            word-break: break-all; /* For long barcodes */
+            color: #03A9F4; /* أزرق للقيمة الممسوحة */
+            word-break: break-all; /* لضمان عرض الباركود الطويل */
         }
         .error-message {
-            color: #FF5252;
+            color: #FF5252; /* أحمر للخطأ */
             margin-top: 15px;
         }
     </style>
@@ -54,11 +55,12 @@
     <p class="error-message" id="errorMessage"></p>
 
     <script type="module">
-        // Firebase Imports
+        // Firebase Imports (مستقلة عن shared.js)
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js";
-        import { getFirestore, doc, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
+        import { getFirestore, doc, updateDoc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
 
         // Firebase Configuration - REPLACE WITH YOUR ACTUAL FIREBASE PROJECT CONFIG
+        // هذه البيانات يجب أن تكون مطابقة تماماً لبيانات مشروعك الحقيقي في Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyC5ls-rPdJ65x5BoMGwAOpdcPtD585C2ys",
             authDomain: "pharmacy-inventory-bf04a.firebaseapp.com",
@@ -84,6 +86,7 @@
         
         let html5QrCode;
         let isScanning = false;
+        let lastProcessedValue = null; // لتتبع آخر قيمة تم معالجتها ومنع الإرسال المتكرر جداً لنفس الكود
 
         function updateUI(message, value = '', error = '') {
             statusMessage.textContent = message;
@@ -93,45 +96,58 @@
         }
 
         async function onScanSuccess(decodedText, decodedResult) {
-            // Stop scanner temporarily to prevent rapid re-scans of the same code
+            // تجنب المعالجة المتكررة لنفس الكود بسرعة فائقة
+            if (decodedText === lastProcessedValue) {
+                return;
+            }
+            lastProcessedValue = decodedText; // تحديث آخر قيمة تم معالجتها
+
+            updateUI('تم المسح بنجاح!', decodedText);
+            
+            // يمكن إيقاف الماسح مؤقتاً لتجنب المسح المتكرر بسرعة شديدة، ثم إعادة تشغيله
             if (isScanning && html5QrCode.isScanning) {
                 await html5QrCode.stop().catch(err => console.error("Error stopping scanner after scan:", err));
                 isScanning = false;
             }
-            
-            updateUI('تم المسح بنجاح!', decodedText);
-            
+
             try {
-                // Update Firestore directly with the scanned value
+                // Fetch current purpose from Firestore (set by main app)
+                const docSnap = await getDoc(scannerSessionDocRef);
+                const purpose = docSnap.exists() ? docSnap.data().purpose || 'unknown' : 'unknown';
+
+                // Update Firestore directly with the scanned value and the purpose
                 await updateDoc(scannerSessionDocRef, {
-                    status: 'scanned', // Indicate that a new value has been scanned
+                    status: 'scanned', // للإشارة إلى أن قيمة جديدة قد تم مسحها
                     scannedValue: decodedText,
                     scannedAt: new Date(),
-                    // We don't need 'purpose' here, as the main app will just read the value
+                    purpose: purpose // نرسل الغرض الذي تلقيناه من الصفحة الرئيسية
                 });
-                console.log("Firestore updated with scanned value:", decodedText);
+                console.log("Firestore updated with scanned value:", decodedText, "for purpose:", purpose);
             } catch (e) {
                 console.error("Error updating Firestore:", e);
                 updateUI('خطأ في إرسال الكود!', decodedText, 'فشل إرسال الكود لـ Firestore.');
             }
 
-            // After a short delay, restart the scanner to be ready for the next item
+            // بعد تأخير قصير، أعد تشغيل الماسح ليكون جاهزًا للعنصر التالي
             setTimeout(() => {
-                startScanner();
-            }, 1000); // Wait 1 second before restarting
+                startScanner(); // أعد تشغيل الماسح الضوئي للمسح المستمر
+            }, 1000); // انتظر 1 ثانية قبل إعادة التشغيل
         }
         
         function onScanFailure(error) { 
-            // This function is called frequently. Only log critical errors.
+            // يتم استدعاء هذه الوظيفة بشكل متكرر. قم بتسجيل الأخطاء الحرجة فقط.
             if (error.includes("NotReadableError") || error.includes("ConstraintNotSatisfiedError")) {
                 updateUI('خطأ في الكاميرا', '', `الخطأ: ${error}`);
                 console.error("Critical scan failure:", error);
+                // محاولة إعادة تشغيل الكاميرا بعد فترة وجيزة إذا كان هناك خطأ حرج
+                setTimeout(() => startScanner(), 3000); 
             }
         }
 
         async function startScanner() {
             if (html5QrCode && html5QrCode.isScanning) {
                 console.log("Scanner already running, not restarting.");
+                updateUI('الماسح جاهز وفي انتظار الكود...');
                 return;
             }
 
@@ -141,8 +157,8 @@
             }
             try {
                 await html5QrCode.start(
-                    { facingMode: "environment" }, // Prefer rear camera
-                    { fps: 10, qrbox: { width: 250, height: 250 } }, // Scan settings
+                    { facingMode: "environment" }, // يفضل الكاميرا الخلفية
+                    { fps: 10, qrbox: { width: 250, height: 250 } }, // إعدادات المسح
                     onScanSuccess,
                     onScanFailure
                 );
@@ -150,7 +166,8 @@
                 updateUI('الماسح جاهز وفي انتظار الكود...');
                 console.log("Scanner started successfully.");
 
-                // Set initial status in Firestore to indicate readiness
+                // تعيين الحالة الأولية في Firestore للإشارة إلى الجاهزية
+                // يستخدم setDoc هنا في حال عدم وجود المستند، أو updateDoc إذا كان موجودًا
                 await setDoc(scannerSessionDocRef, { status: 'phoneReady', lastSeen: new Date() }, { merge: true });
 
             } catch (err) {
@@ -159,10 +176,10 @@
             }
         }
         
-        // Start scanner when the page loads
+        // ابدأ الماسح عند تحميل الصفحة
         document.addEventListener('DOMContentLoaded', startScanner);
 
-        // Optional: Listen for page visibility to pause/resume scanner (for PWA)
+        // اختياري: الاستماع لرؤية الصفحة لإيقاف/استئناف الماسح (مفيد لتطبيقات PWA)
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 if (html5QrCode && html5QrCode.isScanning) {
