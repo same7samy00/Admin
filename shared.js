@@ -62,10 +62,8 @@ function loadSettings() {
 async function getSettings() {
     return new Promise(resolve => {
         if (currentSettings && currentSettings.storeName !== "شيخ العرب" && document.readyState === 'complete') { 
-            // إذا كانت الإعدادات قد تم تحميلها بالفعل ومستند DOM جاهز، أعدها مباشرة
             resolve(currentSettings);
         } else {
-            // انتظر حتى يتم تشغيل حدث 'settingsUpdated' مرة واحدة على الأقل
             const handleSettingsLoaded = () => {
                 document.removeEventListener('settingsUpdated', handleSettingsLoaded);
                 resolve(currentSettings);
@@ -169,7 +167,6 @@ async function requestScan(purpose) {
 
 // وظيفة للاستماع إلى جلسة الماسح الضوئي (تستخدمها صفحات الكمبيوتر لاستقبال النتائج)
 function listenToScannerSession(callback) {
-    // إذا كان هناك مستمع موجود بالفعل، قم بإلغاء الاشتراك منه أولاً
     if (scannerSessionUnsubscribe) {
         scannerSessionUnsubscribe();
         console.log("shared.js: Unsubscribed from previous scanner session listener.");
