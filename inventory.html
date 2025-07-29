@@ -6,92 +6,7 @@
     <title>إدارة المخزون - شيخ العرب</title>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
-    <style>
-        /* Notification styles (copied from shared.js context or main style.css if global) */
-        #notification-container {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .notification {
-            background-color: #333;
-            color: #fff;
-            padding: 10px 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            opacity: 0;
-            transform: translateY(-20px);
-            transition: opacity 0.3s ease, transform 0.3s ease;
-            min-width: 250px;
-            text-align: center;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-        .notification.show {
-            opacity: 1;
-            transform: translateY(0);
-        }
-        .notification.success { background-color: #4CAF50; }
-        .notification.error { background-color: #f44336; }
-        .notification.warning { background-color: #ff9800; }
-        .notification i { font-size: 1.2em; }
-
-        /* Confirmation modal styles (copied from shared.js context or main style.css if global) */
-        .confirmation-modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1001;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.3s ease, visibility 0.3s ease;
-        }
-        .confirmation-modal-overlay.show {
-            opacity: 1;
-            visibility: visible;
-        }
-        .confirmation-modal {
-            background-color: #fff;
-            color: var(--text-dark);
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
-            text-align: center;
-            max-width: 400px;
-            width: 90%;
-            transform: scale(0.9);
-            transition: transform 0.3s ease;
-        }
-        .confirmation-modal-overlay.show .confirmation-modal {
-            transform: scale(1);
-        }
-        .confirmation-modal h3 {
-            margin-top: 0;
-            margin-bottom: 20px;
-            font-size: 1.4em;
-            color: var(--text-dark);
-        }
-        .confirmation-modal .modal-buttons {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-        }
-    </style>
-</head>
+    <link rel="stylesheet" href="style.css"> </head>
 <body>
     <aside class="sidebar">
         <div class="logo" id="storeLogo">شيخ <span>العرب</span></div>
@@ -171,7 +86,7 @@
     </div>
 
     <script type="module">
-        // استيراد الوظائف المشتركة من shared.js
+        // Import shared functions and Firebase dependencies
         import { 
             db, 
             showNotification, 
@@ -184,9 +99,9 @@
             loadSettings, 
             canAccessSalesHistory, 
             canAccessSettings 
-        } from './shared.js'; // تأكد من المسار الصحيح لـ shared.js
+        } from './shared.js'; 
 
-        import { collection, getDocs, doc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+        import { collection, getDocs, doc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js"; // Updated SDK version
 
         const productsTableBody = document.getElementById('productsTableBody');
         const searchInput = document.getElementById('searchProduct');
@@ -206,8 +121,8 @@
                 renderProducts();
             } catch (e) {
                 console.error("Error fetching products: ", e);
-                productsTableBody.innerHTML = '<tr><td colspan="7" class="table-placeholder error">حدث خطأ أثناء تحميل المنتجات.</td></tr>';
                 showNotification("خطأ في تحميل المنتجات.", "error");
+                productsTableBody.innerHTML = '<tr><td colspan="7" class="table-placeholder error">حدث خطأ أثناء تحميل المنتجات.</td></tr>';
             }
         }
 
@@ -246,7 +161,6 @@
                 else if (status === 'نفد المخزون') statusClass = 'status-danger';
                 else statusClass = 'status-success';
 
-                // تحديث حالة الأزرار بناءً على الأذونات من shared.js
                 const canEdit = canEditProducts();
                 const canDelete = canDeleteProducts();
 
@@ -263,7 +177,6 @@
                     </td>
                 `;
             });
-            // تحديث زر "إضافة منتج" بناءً على الأذونات
             addProductBtn.style.display = canAddProducts() ? '' : 'none';
         }
         
@@ -282,7 +195,7 @@
                         await deleteDoc(doc(db, "products", productId));
                         showNotification('تم حذف المنتج بنجاح!', 'success');
                         allProducts = allProducts.filter(p => p.id !== productId);
-                        renderProducts(); // إعادة عرض المنتجات بعد الحذف
+                        renderProducts();
                     } catch (err) {
                         console.error("Error deleting document: ", err);
                         showNotification('فشل حذف المنتج.', 'error');
@@ -300,11 +213,10 @@
             requestScan('search');
         });
         
-        // الاستماع لجلسة الماسح الضوئي لمعالجة القيم الممسوحة للبحث
         listenToScannerSession((scannedValue, purpose) => {
             if (purpose === 'search' && scannedValue) {
                 searchInput.value = scannedValue;
-                renderProducts(); // إعادة عرض المنتجات بناءً على القيمة الممسوحة
+                renderProducts();
                 showNotification(`تم البحث عن: ${scannedValue}`, 'success');
             }
         });
@@ -322,18 +234,21 @@
             }
         }
 
-        // عند تحميل الصفحة
-        document.addEventListener('DOMContentLoaded', () => {
-            loadSettings(); // ابدأ الاستماع لتحديثات الإعدادات
-            fetchProducts(); // جلب المنتجات
-            updateNavigationPermissions(); // تحديث روابط التنقل بناءً على الإعدادات الأولية
+        // Event listener for custom 'settingsUpdated' event from shared.js
+        document.addEventListener('settingsUpdated', () => {
+            renderProducts(); // Re-render products to update button states based on new permissions
+            updateNavigationPermissions(); // Update sidebar links
         });
 
-        // قد تحتاج إلى إضافة معالج زر تسجيل الخروج
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSettings(); // Start listening to settings updates
+            fetchProducts(); // Initial fetch of products
+        });
+
         document.getElementById('logoutButton').addEventListener('click', () => {
-            // تنفيذ منطق تسجيل الخروج هنا
+            // Implement logout logic here
             showNotification('تم تسجيل الخروج بنجاح!', 'success');
-            // setTimeout(() => window.location.href = 'login.html', 1500); // مثال: إعادة توجيه لصفحة تسجيل الدخول
+            // setTimeout(() => window.location.href = 'login.html', 1500); // Example: redirect to login page
         });
     </script>
 </body>
