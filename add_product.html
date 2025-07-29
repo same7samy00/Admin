@@ -83,11 +83,9 @@
         import { 
             db, 
             showNotification, 
-            listenToScannerSession, 
-            requestScan, 
             canAddProducts, 
             canEditProducts, 
-            loadSettings 
+            loadSettings
         } from './shared.js'; 
 
         import { collection, addDoc, doc, updateDoc, getDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
@@ -96,6 +94,7 @@
         const saveBtn = document.getElementById('saveProductBtn');
         const urlParams = new URLSearchParams(window.location.search);
         const editingProductId = urlParams.get('id');
+        const requestScanForNewProductBtn = document.getElementById('requestScanForNewProduct'); // الزر الجديد
 
         const fields = {
             name: { input: document.getElementById('productName'), error: document.getElementById('productNameError') },
@@ -272,15 +271,30 @@
         }
 
         saveBtn.addEventListener('click', saveProduct);
-        document.getElementById('requestScanForNewProduct').addEventListener('click', () => requestScan('add_new'));
         
-        // هنا يتم الاستماع للماسح الضوئي وتحديث حقل الباركود
-        listenToScannerSession((scannedValue, purpose) => {
-            if (purpose === 'add_new' && scannedValue) {
-                fields.barcode.input.value = scannedValue; // تحديث حقل الباركود
-                showNotification(`تم استلام الباركود: ${scannedValue}`, 'success');
+        // ***** وظيفة فتح الماسح والاستماع لرسالة *****
+        requestScanForNewProductBtn.addEventListener('click', () => {
+            // فتح الماسح في نافذة منبثقة أو علامة تبويب جديدة
+            window.open('scanner_only.html?purpose=add_new', '_blank', 'width=450,height=550,toolbar=no,location=no,status=no,menubar=no,scrollbars=no,resizable=yes');
+            showNotification("تم فتح الماسح الضوئي. يرجى مسح الكود.", "info");
+        });
+
+        // الاستماع لرسائل من النافذة المنبثقة (الماسح الضوئي)
+        window.addEventListener('message', (event) => {
+            // تأكد من أن الرسالة تأتي من مصدر موثوق به (نفس النطاق)
+            if (event.origin !== window.location.origin) {
+                console.warn("Received message from untrusted origin:", event.origin);
+                return;
+            }
+
+            const data = event.data;
+            if (data && data.type === 'scannedBarcode' && data.purpose === 'add_new') {
+                fields.barcode.input.value = data.value; // تحديث حقل الباركود
+                showNotification(`تم استلام الباركود: ${data.value}`, 'success');
+                console.log("Received barcode from scanner:", data.value);
             }
         });
+        // ***** نهاية وظيفة فتح الماسح والاستماع لرسالة *****
     </script>
 </body>
 </html>
