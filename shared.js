@@ -23,7 +23,7 @@ const analytics = getAnalytics(app);
 // *** متغيرات خاصة بجلسة الماسح الضوئي (مهمة جداً) ***
 const SCANNER_SESSION_ID = "myScannerSession123"; 
 const scannerSessionDocRef = doc(db, "scannerSessions", SCANNER_SESSION_ID);
-let lastProcessedScannedValue = null; 
+let lastProcessedScannedValue = null; // تم تعريف المتغير هنا مرة واحدة فقط
 
 // الإعدادات الافتراضية للأذونات
 let currentSettings = {
@@ -32,10 +32,10 @@ let currentSettings = {
     canDeleteProducts: true,
     canAccessSalesHistory: true,
     canAccessSettings: true,
-    storeName: "شيخ العرب",
-    invoiceAddress: "عنوان المتجر",
-    invoicePhone: "رقم الهاتف",
-    invoiceThankYou: "شكراً لتسوقكم من شيخ العرب!",
+    storeName: "شيخ العرب", // افتراضي
+    invoiceAddress: "عنوان المتجر", // افتراضي
+    invoicePhone: "رقم الهاتف", // افتراضي
+    invoiceThankYou: "شكراً لتسوقكم من شيخ العرب!", // افتراضي
     salesHistoryPassword: "admin" // كلمة مرور افتراضية لسجل المبيعات
 };
 
@@ -59,22 +59,17 @@ function loadSettings() {
 }
 
 // *** وظيفة جديدة: للحصول على الإعدادات الحالية ***
-// هذه الوظيفة ستكون غير متزامنة لأنها قد تحتاج للانتظار حتى يتم تحميل الإعدادات من Firestore.
-// يمكن استخدام Promise أو ببساطة استخدام الإعدادات التي تم تحميلها بالفعل.
 async function getSettings() {
-    // إذا كانت الإعدادات قد تم تحميلها بالفعل (currentSettings ليست الافتراضية الأولية)، أعدها مباشرة
-    // إذا كنت تريد التأكد من أنها أحدث نسخة من Firestore، يمكنك جلبها هنا مرة أخرى
-    // ولكن نظرًا لوجود onSnapshot، فإن currentSettings يجب أن تكون محدثة
     return new Promise(resolve => {
-        if (currentSettings && currentSettings.storeName !== "شيخ العرب") { // مؤشر على أنها حملت من Firestore
-            resolve(currentSettings);
-        } else {
-            // انتظر حتى يتم تشغيل حدث 'settingsUpdated' مرة واحدة على الأقل
+        // إذا كان هناك تحديث قيد الانتظار أو لم يتم تحميل الإعدادات بعد
+        if (currentSettings.storeName === "شيخ العرب" && document.readyState !== 'complete') {
             const handleSettingsLoaded = () => {
                 document.removeEventListener('settingsUpdated', handleSettingsLoaded);
                 resolve(currentSettings);
             };
             document.addEventListener('settingsUpdated', handleSettingsLoaded);
+        } else {
+            resolve(currentSettings);
         }
     });
 }
@@ -154,8 +149,8 @@ function canAccessSettings() { return currentSettings.canAccessSettings; }
 
 
 let scannerSessionUnsubscribe = null; 
-let lastProcessedScannedValue = null; 
 
+// وظيفة لطلب المسح (تستخدمها صفحات الكمبيوتر لفتح الماسح ولإرسال الغرض)
 async function requestScan(purpose) {
     try {
         await setDoc(scannerSessionDocRef, { 
@@ -171,6 +166,7 @@ async function requestScan(purpose) {
     }
 }
 
+// وظيفة للاستماع إلى جلسة الماسح الضوئي (تستخدمها صفحات الكمبيوتر لاستقبال النتائج)
 function listenToScannerSession(callback) {
     if (scannerSessionUnsubscribe) {
         scannerSessionUnsubscribe();
@@ -182,17 +178,19 @@ function listenToScannerSession(callback) {
             const data = docSnap.data();
             console.log("shared.js: Scanner session data received:", data);
             
+            // إذا كانت الحالة "scanned" ولقد تم مسح قيمة جديدة
             if (data.status === "scanned" && data.scannedValue && data.scannedValue !== lastProcessedScannedValue) {
                 lastProcessedScannedValue = data.scannedValue; 
                 callback(data.scannedValue, data.purpose); 
                 
+                // بعد المعالجة، يتم إعادة تعيين الحالة في Firestore لتجنب التكرار
                 setTimeout(async () => {
                     await updateDoc(scannerSessionDocRef, { status: "processed", scannedValue: null }).catch(e => console.error("Error updating scanner session status:", e));
                     console.log("shared.js: Scanner session status reset to processed in Firestore.");
-                    lastProcessedScannedValue = null; 
-                }, 500); 
-
+                    // لا مسح لـ lastProcessedScannedValue هنا، نعتمد على حالة processed في Firestore
+                }, 500); // تأخير نصف ثانية
             } else if (data.status === "processed" && lastProcessedScannedValue !== null) {
+                // إذا تلقينا تأكيد المعالجة، يمكننا مسح القيمة المخزنة
                 lastProcessedScannedValue = null;
                 console.log("shared.js: lastProcessedScannedValue reset from 'processed' status.");
             } else if (data.status === "idle" || data.status === "phoneReady") {
@@ -209,6 +207,7 @@ function listenToScannerSession(callback) {
     });
 }
 
+// وظيفة لتحديث الكود الممسوح (تستخدمها صفحة الماسح الضوئي scanner_only.html)
 async function updateScannedValue(value, purpose) {
     try {
         await updateDoc(scannerSessionDocRef, { 
@@ -230,7 +229,7 @@ export {
     showNotification, 
     showConfirmation, 
     loadSettings,
-    getSettings, // تم تصديرها
+    getSettings, 
     canAddProducts, 
     canEditProducts, 
     canDeleteProducts, 
