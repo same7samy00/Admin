@@ -72,25 +72,22 @@
     </div>
 
     <script type="module">
-        // Import Firebase SDKs directly (independent from shared.js)
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js"; // Updated SDK version
-        import { getFirestore, doc, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js"; // Updated SDK version
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js";
+        import { getFirestore, doc, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
 
-        // Firebase Configuration - MUST MATCH YOUR ACTUAL FIREBASE PROJECT CONFIG
+        // Firebase Configuration - MUST MATCH YOUR ACTUAL FIREBASE PROJECT CONFIG AND shared.js
         const firebaseConfig = {
-            apiKey: "AIzaSyC5ls-rPdJ65x5BoMGwAOpdcPtD585C2ys", // NOTE: This API key is different from the one in shared.js - ENSURE THEY MATCH YOUR PROJECT!
-            authDomain: "pharmacy-inventory-bf04a.firebaseapp.com", // This too
-            projectId: "pharmacy-inventory-bf04a", // This too
-            storageBucket: "pharmacy-inventory-bf04a.firebasestorage.app", // This too
-            messagingSenderId: "937788650384", // This too
-            appId: "1:937788650384:web:6451225d00e648f3a0b915", // This too
-            measurementId: "G-ZGC9EQ55SL" // This too
+            apiKey: "AIzaSyC5ls-rPdJ65x5BoMGwAOpdcPtD585C2ys", // يجب أن تكون هذه البيانات مطابقة لـ shared.js
+            authDomain: "pharmacy-inventory-bf04a.firebaseapp.com",
+            projectId: "pharmacy-inventory-bf04a",
+            storageBucket: "pharmacy-inventory-bf04a.firebasestorage.app",
+            messagingSenderId: "937788650384",
+            appId: "1:937788650384:web:6451225d00e648f3a0b915",
+            measurementId: "G-ZGC9EQ55SL"
         };
-
         // Shared Scanner Session ID - MUST MATCH IN shared.js
         const SHARED_SCANNER_SESSION_ID = "YOUR_STORE_UNIQUE_SCANNER_ID_12345"; 
         
-        // Initialize Firebase for the scanner page
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const scannerSessionDocRef = doc(db, 'scannerSessions', SHARED_SCANNER_SESSION_ID);
