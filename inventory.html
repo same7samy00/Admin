@@ -91,14 +91,12 @@
             db, 
             showNotification, 
             showConfirmation, 
-            listenToScannerSession, 
-            requestScan, 
             canAddProducts, 
             canEditProducts, 
             canDeleteProducts, 
             loadSettings, 
             canAccessSalesHistory, 
-            canAccessSettings 
+            canAccessSettings
         } from './shared.js'; 
 
         import { collection, getDocs, doc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
@@ -109,6 +107,7 @@
         const addProductBtn = document.getElementById('addProductBtn');
         const salesHistoryLink = document.getElementById('salesHistoryLink');
         const settingsLink = document.getElementById('settingsLink');
+        const requestScanForSearchBtn = document.getElementById('requestScanForSearchBtn');
 
         let allProducts = [];
 
@@ -209,18 +208,30 @@
         searchInput.addEventListener('input', () => renderProducts());
         categorySelect.addEventListener('change', () => renderProducts());
         
-        document.getElementById('requestScanForSearchBtn').addEventListener('click', () => {
-            requestScan('search');
+        // ***** وظيفة فتح الماسح والاستماع لرسالة *****
+        requestScanForSearchBtn.addEventListener('click', () => {
+            // فتح الماسح في نافذة منبثقة أو علامة تبويب جديدة
+            window.open('scanner_only.html?purpose=search', '_blank', 'width=450,height=550,toolbar=no,location=no,status=no,menubar=no,scrollbars=no,resizable=yes');
+            showNotification("تم فتح الماسح الضوئي. يرجى مسح الكود.", "info");
         });
-        
-        // هنا يتم الاستماع للماسح الضوئي وتحديث حقل البحث
-        listenToScannerSession((scannedValue, purpose) => {
-            if (purpose === 'search' && scannedValue) {
-                searchInput.value = scannedValue; // تحديث حقل البحث
-                renderProducts(); // إعادة عرض المنتجات بالبحث الجديد
-                showNotification(`تم البحث عن: ${scannedValue}`, 'success');
+
+        // الاستماع لرسائل من النافذة المنبثقة (الماسح الضوئي)
+        window.addEventListener('message', (event) => {
+            // تأكد من أن الرسالة تأتي من مصدر موثوق به (نفس النطاق أو نطاق محدد)
+            if (event.origin !== window.location.origin) {
+                console.warn("Received message from untrusted origin:", event.origin);
+                return;
+            }
+
+            const data = event.data;
+            if (data && data.type === 'scannedBarcode' && data.purpose === 'search') {
+                searchInput.value = data.value; // تحديث حقل البحث
+                renderProducts(); // بدء البحث
+                showNotification(`تم البحث عن: ${data.value}`, 'success');
+                console.log("Received barcode from scanner:", data.value);
             }
         });
+        // ***** نهاية وظيفة فتح الماسح والاستماع لرسالة *****
 
         function updateNavigationPermissions() {
             if (!canAccessSalesHistory()) {
