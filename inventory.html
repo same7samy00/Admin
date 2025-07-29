@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إدارة المخزون - شيخ العرب</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Notification styles (copied from shared.js context) */
+        #notification-container {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .notification {
+            background-color: #333;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            min-width: 250px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .notification.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .notification.success { background-color: #4CAF50; }
+        .notification.error { background-color: #f44336; }
+        .notification.warning { background-color: #ff9800; }
+        .notification i { font-size: 1.2em; }
+
+        /* Confirmation modal styles (copied from shared.js context) */
+        .confirmation-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1001;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .confirmation-modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .confirmation-modal {
+            background-color: #fff;
+            color: var(--text-dark);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+        .confirmation-modal-overlay.show .confirmation-modal {
+            transform: scale(1);
+        }
+        .confirmation-modal h3 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-size: 1.4em;
+            color: var(--text-dark);
+        }
+        .confirmation-modal .modal-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+    </style>
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="logo" id="storeLogo">شيخ <span>العرب</span></div>
+        <ul class="nav-list">
+            <li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="ri-dashboard-line"></i><span>الصفحة الرئيسية</span></a></li>
+            <li class="nav-item"><a href="inventory.html" class="nav-link active"><i class="ri-box-3-line"></i><span>إدارة المخزون</span></a></li>
+            <li class="nav-item"><a href="pos.html" class="nav-link"><i class="ri-shopping-cart-line"></i><span>نقطة البيع</span></a></li>
+            <li class="nav-item"><a href="sales_history.html" class="nav-link" id="salesHistoryLink"><i class="ri-history-line"></i><span>سجل المبيعات</span></a></li>
+            <li class="nav-item"><a href="settings.html" class="nav-link" id="settingsLink"><i class="ri-settings-3-line"></i><span>الإعدادات</span></a></li>
+            <li class="nav-item logout"><a href="#" id="logoutButton" class="nav-link logout-btn"><i class="ri-logout-box-line"></i><span>تسجيل الخروج</span></a></li>
+        </ul>
+    </aside>
+
+    <main class="main-content">
+        <div class="content-wrapper">
+            <div class="page-header">
+                <h1>إدارة المخزون</h1>
+                <div class="action-buttons">
+                    <a href="add_product.html" class="btn btn-primary" id="addProductBtn"><i class="ri-add-line"></i><span>إضافة منتج</span></a>
+                    <button class="btn btn-secondary" id="requestScanForSearchBtn"><i class="ri-qr-code-line"></i><span>مسح للبحث</span></button>
+                </div>
+            </div>
+
+            <div class="filter-section content-wrapper">
+                <div class="input-group">
+                    <input type="search" id="searchProduct" placeholder="البحث بالاسم أو الكود..." autocomplete="off">
+                </div>
+                <div class="input-group">
+                    <select id="filterCategory">
+                        <option value="">كل الفئات</option>
+                        <option value="بهارات">بهارات</option>
+                        <option value="حبوب">حبوب</option>
+                        <option value="أعشاب">أعشاب</option>
+                        <option value="زيوت">زيوت</option>
+                        <option value="مكسرات">مكسرات</option>
+                        <option value="عسل">عسل</option>
+                        <option value="تمور">تمور</option>
+                        <option value="بقوليات">بقوليات</option>
+                        <option value="مجففات">مجففات</option>
+                        <option value="عطور وبخور">عطور وبخور</option>
+                        <option value="أخرى">أخرى</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>الكود</th>
+                            <th>اسم المنتج</th>
+                            <th>الفئة</th>
+                            <th>الكمية المتاحة</th>
+                            <th>السعر (جنيه)</th>
+                            <th>الحالة</th>
+                            <th>الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="productsTableBody">
+                        <tr><td colspan="7" class="table-placeholder">جاري تحميل المنتجات...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="notification-container"></div>
+
+    <div class="confirmation-modal-overlay" id="confirmationModalOverlay">
+        <div class="confirmation-modal">
+            <h3 id="confirmationMessage"></h3>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" id="cancelConfirmBtn">إلغاء</button>
+                <button class="btn btn-danger" id="confirmBtn">تأكيد</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, doc, deleteDoc, query, orderBy, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+
+        // Firebase Configuration (from original script block)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBfgOusQjs1qj6G_92_Ecu2wjxASeO2Tko",
+            authDomain: "project-2965375871585611133.firebaseapp.com",
+            projectId: "project-2965375871585611133",
+            storageBucket: "project-2965375871585611133.firebasestorage.app",
+            messagingSenderId: "195369497927",
+            appId: "1:195369497927:web:451c349c098f2a59c18862",
+            measurementId: "G-YN2HRECRL0"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const SHARED_SCANNER_SESSION_ID = "YOUR_STORE_UNIQUE_SCANNER_ID_12345"; // Same ID as in qr_scanner.html
+        const scannerSessionDocRef = doc(db, 'scannerSessions', SHARED_SCANNER_SESSION_ID);
+
+        // Global settings for permissions (initially default, updated by Firestore)
+        let currentSettings = {
+            canAddProducts: true,
+            canEditProducts: true,
+            canDeleteProducts: true,
+            canAccessSalesHistory: true,
+            canAccessSettings: true
+        };
+
+        // Function to show notifications (copied from shared.js)
+        function showNotification(message, type = 'info', duration = 3000) {
+            const container = document.getElementById('notification-container');
+            if (!container) return;
+
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            let iconClass = '';
+            if (type === 'success') iconClass = 'ri-check-line';
+            else if (type === 'error') iconClass = 'ri-error-warning-line';
+            else if (type === 'warning') iconClass = 'ri-alert-line';
+            else iconClass = 'ri-information-line';
+
+            notification.innerHTML = `<i class="${iconClass}"></i><span>${message}</span>`;
+
+            container.appendChild(notification);
+
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 10);
+
+            setTimeout(() => {
+                notification.classList.remove('show');
+                notification.addEventListener('transitionend', () => notification.remove());
+            }, duration);
+        }
+
+        // Function to show confirmation (copied from shared.js)
+        function showConfirmation(message, onConfirm) {
+            const overlay = document.getElementById('confirmationModalOverlay');
+            const messageEl = document.getElementById('confirmationMessage');
+            const confirmBtn = document.getElementById('confirmBtn');
+            const cancelBtn = document.getElementById('cancelConfirmBtn');
+
+            messageEl.textContent = message;
+            overlay.classList.add('show');
+
+            const handleConfirm = () => {
+                onConfirm();
+                overlay.classList.remove('show');
+                confirmBtn.removeEventListener('click', handleConfirm);
+                cancelBtn.removeEventListener('click', handleCancel);
+            };
+
+            const handleCancel = () => {
+                overlay.classList.remove('show');
+                confirmBtn.removeEventListener('click', handleConfirm);
+                cancelBtn.removeEventListener('click', handleCancel);
+            };
+
+            confirmBtn.addEventListener('click', handleConfirm);
+            cancelBtn.addEventListener('click', handleCancel);
+        }
+
+        // Permission Checkers (copied from shared.js)
+        function canAddProducts() { return currentSettings.canAddProducts; }
+        function canEditProducts() { return currentSettings.canEditProducts; }
+        function canDeleteProducts() { return currentSettings.canDeleteProducts; }
+        function canAccessSalesHistory() { return currentSettings.canAccessSalesHistory; }
+        function canAccessSettings() { return currentSettings.canAccessSettings; }
+
+        // Load settings from Firestore (copied and adapted from shared.js)
+        function loadSettings() {
+            const settingsDocRef = doc(db, 'settings', 'userPermissions');
+            onSnapshot(settingsDocRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    currentSettings = { ...currentSettings, ...docSnap.data() };
+                    console.log("Settings updated:", currentSettings);
+                    // Re-render products to update action buttons based on new permissions
+                    renderProducts(); 
+                    updateNavigationPermissions(); // Update sidebar links
+                } else {
+                    console.warn("No user permissions settings found. Using default.");
+                    // If no settings document, maybe create one with defaults
+                    setDoc(settingsDocRef, currentSettings, { merge: true });
+                }
+            }, (error) => {
+                console.error("Error listening to settings:", error);
+                showNotification("خطأ في تحميل الإعدادات.", "error");
+            });
+        }
+
+        // Scanner session logic (copied and adapted from shared.js)
+        let scannerSessionListenerUnsubscribe = null;
+
+        function listenToScannerSession(callback) {
+            if (scannerSessionListenerUnsubscribe) {
+                scannerSessionListenerUnsubscribe(); // Unsubscribe from previous listener
+            }
+            scannerSessionListenerUnsubscribe = onSnapshot(scannerSessionDocRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    if (data.status === 'scanned' && data.scannedValue) {
+                        callback(data.scannedValue, data.purpose);
+                        // Reset status after processing to allow next scan
+                        updateDoc(scannerSessionDocRef, {
+                            status: 'readyForNextScan',
+                            scannedValue: null,
+                            purpose: null
+                        }).catch(e => console.error("Error resetting scanner status:", e));
+                    }
+                }
+            }, (error) => {
+                console.error("Error listening to scanner session:", error);
+                showNotification("خطأ في الاتصال بالماسح الضوئي.", "error");
+            });
+        }
+
+        async function requestScan(purpose) {
+            try {
+                await setDoc(scannerSessionDocRef, {
+                    status: 'scanRequested',
+                    purpose: purpose,
+                    requestedAt: new Date()
+                }, { merge: true });
+                showNotification("تم إرسال طلب المسح الضوئي إلى جهاز QR.", "info");
+                // Optionally, open qr_scanner.html in a new tab if it's not already open
+                // window.open('qr_scanner.html', '_blank'); 
+            } catch (e) {
+                console.error("Error requesting scan:", e);
+                showNotification("فشل إرسال طلب المسح الضوئي.", "error");
+            }
+        }
+
+        const productsTableBody = document.getElementById('productsTableBody');
+        const searchInput = document.getElementById('searchProduct');
+        const categorySelect = document.getElementById('filterCategory');
+        const addProductBtn = document.getElementById('addProductBtn');
+        const salesHistoryLink = document.getElementById('salesHistoryLink');
+        const settingsLink = document.getElementById('settingsLink');
+
+        let allProducts = [];
+
+        async function fetchProducts() {
+            productsTableBody.innerHTML = '<tr><td colspan="7" class="table-placeholder">جاري تحميل المنتجات...</td></tr>';
+            try {
+                const q = query(collection(db, "products"), orderBy("createdAt", "desc"));
+                const querySnapshot = await getDocs(q);
+                allProducts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderProducts();
+            } catch (e) {
+                console.error("Error fetching products: ", e);
+                productsTableBody.innerHTML = '<tr><td colspan="7" class="table-placeholder error">حدث خطأ أثناء تحميل المنتجات.</td></tr>';
+                showNotification("خطأ في تحميل المنتجات.", "error");
+            }
+        }
+
+        function renderProducts(productsToRender = null) {
+            let filteredProducts = productsToRender;
+
+            if (filteredProducts === null) {
+                const searchQuery = searchInput.value.toLowerCase().trim();
+                const categoryFilter = categorySelect.value;
+
+                filteredProducts = allProducts;
+
+                if (categoryFilter) {
+                    filteredProducts = filteredProducts.filter(p => p.category === categoryFilter);
+                }
+
+                if (searchQuery) {
+                    filteredProducts = filteredProducts.filter(p =>
+                        (p.name && p.name.toLowerCase().includes(searchQuery)) ||
+                        (p.barcode && p.barcode.toLowerCase().includes(searchQuery))
+                    );
+                }
+            }
+
+            productsTableBody.innerHTML = '';
+            if (filteredProducts.length === 0) {
+                productsTableBody.innerHTML = '<tr><td colspan="7" class="table-placeholder">لا توجد منتجات.</td></tr>';
+                return;
+            }
+
+            filteredProducts.forEach(product => {
+                const row = productsTableBody.insertRow();
+                const status = product.status || 'متوفر';
+                let statusClass = '';
+                if (status === 'قليل المخزون') statusClass = 'status-warning';
+                else if (status === 'نفد المخزون') statusClass = 'status-danger';
+                else statusClass = 'status-success';
+
+                // Check permissions for buttons dynamically
+                const canEdit = canEditProducts();
+                const canDelete = canDeleteProducts();
+
+                row.innerHTML = `
+                    <td>${product.barcode || 'N/A'}</td>
+                    <td>${product.name}</td>
+                    <td>${product.category}</td>
+                    <td>${parseFloat(product.quantity || 0)} ${product.unit}</td>
+                    <td>${(parseFloat(product.pricePerUnit || 0)).toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}</td>
+                    <td><span class="status-badge ${statusClass}">${status}</span></td>
+                    <td class="actions">
+                        <button title="تعديل" class="action-btn edit-btn ${canEdit ? '' : 'disabled'}" data-id="${product.id}" ${canEdit ? '' : 'disabled'}><i class="ri-edit-line"></i></button>
+                        <button title="حذف" class="action-btn delete-btn ${canDelete ? '' : 'disabled'}" data-id="${product.id}" ${canDelete ? '' : 'disabled'}><i class="ri-delete-bin-line"></i></button>
+                    </td>
+                `;
+            });
+            addProductBtn.style.display = canAddProducts() ? '' : 'none';
+        }
+
+        productsTableBody.addEventListener('click', (e) => {
+            const editBtn = e.target.closest('.edit-btn');
+            if (editBtn && !editBtn.disabled) {
+                window.location.href = `add_product.html?id=${editBtn.dataset.id}`;
+                return;
+            }
+
+            const deleteBtn = e.target.closest('.delete-btn');
+            if (deleteBtn && !deleteBtn.disabled) {
+                const productId = deleteBtn.dataset.id;
+                showConfirmation('هل أنت متأكد أنك تريد حذف هذا المنتج؟', async () => {
+                    try {
+                        await deleteDoc(doc(db, "products", productId));
+                        showNotification('تم حذف المنتج بنجاح!', 'success');
+                        allProducts = allProducts.filter(p => p.id !== productId);
+                        renderProducts();
+                    } catch (err) {
+                        console.error("Error deleting document: ", err);
+                        showNotification('فشل حذف المنتج.', 'error');
+                    }
+                });
+            } else if (deleteBtn && deleteBtn.disabled) {
+                 showNotification("ليس لديك صلاحية لحذف المنتجات.", "error");
+            }
+        });
+
+        searchInput.addEventListener('input', () => renderProducts());
+        categorySelect.addEventListener('change', () => renderProducts());
+
+        document.getElementById('requestScanForSearchBtn').addEventListener('click', () => {
+            requestScan('search');
+        });
+
+        listenToScannerSession((scannedValue, purpose) => {
+            if (purpose === 'search' && scannedValue) {
+                searchInput.value = scannedValue;
+                renderProducts();
+                showNotification(`تم البحث عن: ${scannedValue}`, 'success');
+            }
+        });
+
+        function updateNavigationPermissions() {
+            if (!canAccessSalesHistory()) {
+                salesHistoryLink.style.display = 'none';
+            } else {
+                salesHistoryLink.style.display = '';
+            }
+            if (!canAccessSettings()) {
+                settingsLink.style.display = 'none';
+            } else {
+                settingsLink.style.display = '';
+            }
+        }
+
+        // Initial load sequence
+        loadSettings(); // Start listening to settings updates
+        fetchProducts(); // Fetch products immediately
+        updateNavigationPermissions(); // Update navigation links initially
+    </script>
+</body>
+</html>
