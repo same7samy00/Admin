@@ -211,6 +211,7 @@
                 const q = query(collection(db, "products"), orderBy("createdAt", "desc"));
                 const querySnapshot = await getDocs(q);
                 allProducts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                console.log("Fetched products successfully:", allProducts); // أضف هذا السطر
                 renderProducts();
             } catch (e) {
                 console.error("Error fetching products: ", e);
@@ -336,11 +337,14 @@
 
         // الاستماع لنتائج المسح من Firestore
         listenToScannerSession((scannedValue, purpose) => {
-            if (purpose === 'search') {
+            console.log("inventory.html: Callback triggered! Scanned Value:", scannedValue, "Purpose:", purpose); // أضف هذا
+            if (purpose === 'search' && scannedValue) {
                 searchInput.value = scannedValue; 
                 renderProducts(); 
                 showNotification(`تم البحث عن: ${scannedValue}`, 'success');
-                console.log("Received barcode from scanner via Firestore:", scannedValue);
+                console.log("inventory.html: Search field updated and renderProducts called."); // أضف هذا
+            } else {
+                console.log("inventory.html: Purpose mismatch or no scanned value in callback."); // أضف هذا
             }
         });
 
@@ -363,10 +367,10 @@
         });
 
         document.addEventListener('DOMContentLoaded', () => {
-    loadSettings(); 
-    fetchProducts(); // <-- هكذا يجب أن يكون
-    listenToScannerSession(() => {}); 
-});
+            loadSettings(); 
+            fetchAllProducts(); // تم تصحيح fetchProducts
+            listenToScannerSession(() => {}); 
+        });
 
         document.getElementById('logoutButton').addEventListener('click', () => {
             showNotification('تم تسجيل الخروج بنجاح!', 'success');
