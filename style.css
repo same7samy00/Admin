@@ -1,4 +1,8 @@
-/* General Body and Font Styles */
+/* Base HTML & Body Styles */
+html {
+    scroll-behavior: smooth;
+}
+
 body {
     font-family: 'Cairo', sans-serif;
     margin: 0;
@@ -6,11 +10,17 @@ body {
     background-color: var(--bg-light);
     color: var(--text-dark);
     line-height: 1.6;
+    display: flex; /* For sidebar layout */
+    min-height: 100vh; /* Ensure body takes full viewport height */
+    overflow-x: hidden; /* Prevent horizontal scroll */
 }
 
+/* Color Variables */
 :root {
     --primary-color: #03A9F4; /* Light Blue */
+    --primary-dark: #0288D1; /* Darker Blue */
     --secondary-color: #607D8B; /* Blue Grey */
+    --secondary-dark: #455A64; /* Darker Blue Grey */
     --accent-color: #FFC107; /* Amber */
     --bg-light: #F0F4F8; /* Lighter background */
     --bg-dark: #2C3E50; /* Darker background, for sidebar */
@@ -20,8 +30,10 @@ body {
     --success-color: #4CAF50;
     --error-color: #F44336;
     --warning-color: #FF9800;
+    --info-color: #2196F3; /* Blue for info notifications */
     --shadow-light: 0 4px 12px rgba(0, 0, 0, 0.08);
     --shadow-medium: 0 8px 24px rgba(0, 0, 0, 0.1);
+    --transition-speed: 0.2s ease-in-out;
 }
 
 /* Base Styles for Buttons, Inputs, Selects */
@@ -31,41 +43,52 @@ button, .btn {
     border-radius: 8px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease-in-out;
+    transition: all var(--transition-speed);
     text-decoration: none; /* For .btn as a link */
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
+    white-space: nowrap; /* Prevent text wrapping */
 }
 
 .btn-primary {
     background-color: var(--primary-color);
     color: var(--text-light);
-    box-shadow: 0 4px 10px rgba(3, 169, 244, 0.3);
+    box-shadow: 0 4px 10px rgba(var(--primary-color), 0.3);
 }
 .btn-primary:hover {
-    background-color: #0288D1;
+    background-color: var(--primary-dark);
     transform: translateY(-2px);
 }
 
 .btn-secondary {
     background-color: var(--secondary-color);
     color: var(--text-light);
-    box-shadow: 0 2px 5px rgba(96, 125, 139, 0.2);
+    box-shadow: 0 2px 5px rgba(var(--secondary-color), 0.2);
 }
 .btn-secondary:hover {
-    background-color: #455A64;
+    background-color: var(--secondary-dark);
     transform: translateY(-2px);
 }
 
 .btn-danger {
     background-color: var(--error-color);
     color: var(--text-light);
-    box-shadow: 0 2px 5px rgba(244, 67, 54, 0.2);
+    box-shadow: 0 2px 5px rgba(var(--error-color), 0.2);
 }
 .btn-danger:hover {
     background-color: #D32F2F;
+    transform: translateY(-2px);
+}
+
+.btn-info {
+    background-color: var(--info-color);
+    color: var(--text-light);
+    box-shadow: 0 2px 5px rgba(var(--info-color), 0.2);
+}
+.btn-info:hover {
+    background-color: #1976D2;
     transform: translateY(-2px);
 }
 
@@ -91,10 +114,10 @@ select {
 input:focus, select:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px rgba(3, 169, 244, 0.2);
+    box-shadow: 0 0 0 2px rgba(var(--primary-color), 0.2);
 }
 
-/* Layout - Used in Inventory and Dashboard */
+/* Layout - Sidebar and Main Content */
 .sidebar {
     width: 250px;
     background-color: var(--bg-dark);
@@ -108,6 +131,13 @@ input:focus, select:focus {
     display: flex;
     flex-direction: column;
     z-index: 100;
+}
+
+.main-content {
+    margin-right: 250px; /* Offset for sidebar */
+    flex-grow: 1; /* Take remaining space */
+    padding: 30px;
+    box-sizing: border-box; /* Include padding in width */
 }
 
 .logo {
@@ -140,7 +170,7 @@ input:focus, select:focus {
     text-decoration: none;
     padding: 12px 15px;
     border-radius: 8px;
-    transition: background-color 0.2s ease, color 0.2s ease;
+    transition: background-color var(--transition-speed), color var(--transition-speed);
     font-size: 1.1em;
 }
 
@@ -163,12 +193,7 @@ input:focus, select:focus {
     color: var(--text-light);
 }
 
-.main-content {
-    margin-right: 250px; /* Offset for sidebar */
-    padding: 30px;
-    flex-grow: 1;
-}
-
+/* Page Components */
 .content-wrapper {
     background-color: #fff;
     padding: 25px 30px;
@@ -195,14 +220,16 @@ input:focus, select:focus {
 .action-buttons {
     display: flex;
     gap: 15px;
+    flex-wrap: wrap; /* Allow wrapping on small screens */
 }
 
-/* Filter Section */
+/* Filter Section (Inventory) */
 .filter-section {
     display: flex;
     gap: 20px;
     margin-bottom: 25px;
     align-items: flex-end; /* Align inputs */
+    flex-wrap: wrap; /* Allow wrapping on small screens */
 }
 .filter-section .input-group {
     flex: 1;
@@ -211,14 +238,17 @@ input:focus, select:focus {
 
 /* Table Styles */
 .table-container {
-    overflow-x: auto;
+    overflow-x: auto; /* Allow horizontal scroll on small screens */
+    border-radius: 12px; /* Match wrapper border radius */
+    box-shadow: var(--shadow-light); /* Add shadow to table container */
 }
 
 .data-table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 15px;
+    margin-top: 0; /* Remove top margin as it's inside container */
     font-size: 0.95em;
+    min-width: 600px; /* Ensure table doesn't shrink too much */
 }
 
 .data-table th, .data-table td {
@@ -232,6 +262,8 @@ input:focus, select:focus {
     color: var(--text-dark);
     font-weight: 700;
     text-transform: capitalize;
+    position: sticky; /* Keep headers visible on scroll */
+    top: 0;
 }
 
 .data-table tbody tr:hover {
@@ -267,7 +299,7 @@ input:focus, select:focus {
     font-size: 1.2em;
     padding: 5px;
     cursor: pointer;
-    transition: color 0.2s ease;
+    transition: color var(--transition-speed);
 }
 .actions .action-btn:hover {
     color: var(--primary-color);
@@ -288,6 +320,8 @@ input:focus, select:focus {
     align-items: center;
     min-height: 100vh;
     background-color: var(--bg-light);
+    padding: 20px;
+    box-sizing: border-box;
 }
 
 .add-product-container {
@@ -366,6 +400,8 @@ input:focus, select:focus {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    width: auto; /* Adjust width dynamically */
+    max-width: 90%; /* Max width for mobile */
 }
 .notification {
     background-color: #333;
@@ -390,7 +426,10 @@ input:focus, select:focus {
 .notification.success { background-color: var(--success-color); }
 .notification.error { background-color: var(--error-color); }
 .notification.warning { background-color: var(--warning-color); }
+.notification.info { background-color: var(--info-color); } /* Added info color */
 .notification i { font-size: 1.2em; }
+.notification a { color: yellow; text-decoration: underline; } /* Style for links in notifications */
+
 
 /* Confirmation Modal */
 .confirmation-modal-overlay {
@@ -439,8 +478,120 @@ input:focus, select:focus {
     gap: 15px;
 }
 
+/* POS Specific Styles */
+.pos-wrapper {
+    display: flex;
+    flex-direction: column;
+}
+.pos-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr; /* Left section wider than right */
+    gap: 30px;
+}
+@media (max-width: 992px) {
+    .pos-grid {
+        grid-template-columns: 1fr; /* Stack columns on smaller screens */
+    }
+}
+
+.search-product-section {
+    position: relative;
+    margin-bottom: 25px;
+}
+.search-results-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0; /* Align with input */
+    width: 100%;
+    background-color: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: var(--shadow-light);
+    max-height: 250px;
+    overflow-y: auto;
+    z-index: 10;
+    display: none;
+}
+.search-result-item {
+    padding: 10px 15px;
+    cursor: pointer;
+    text-align: right;
+    border-bottom: 1px solid var(--border-color);
+}
+.search-result-item:last-child {
+    border-bottom: none;
+}
+.search-result-item:hover {
+    background-color: var(--bg-light);
+}
+.search-result-item.no-results {
+    color: var(--secondary-color);
+    cursor: default;
+}
+
+.cart-section {
+    margin-top: 25px;
+}
+.cart-section h2 {
+    font-size: 1.5em;
+    margin-bottom: 15px;
+    color: var(--text-dark);
+}
+.cart-table .cart-quantity-input {
+    width: 80px;
+    text-align: center;
+    padding: 5px;
+}
+
+.invoice-summary, .payment-details {
+    background-color: var(--bg-light);
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 25px;
+}
+.invoice-summary h2, .payment-details h3 {
+    font-size: 1.5em;
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: var(--text-dark);
+}
+.summary-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+}
+.summary-item.total {
+    font-weight: 700;
+    font-size: 1.4em;
+    color: var(--primary-color);
+    border-top: 1px solid var(--border-color);
+    padding-top: 10px;
+    margin-top: 15px;
+}
+.summary-item.change {
+    font-weight: 700;
+    font-size: 1.3em;
+    color: var(--success-color);
+    border-top: 1px solid var(--border-color);
+    padding-top: 10px;
+    margin-top: 15px;
+}
+.pos-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+.pos-actions button, .pos-actions a {
+    width: 100%;
+    justify-content: center;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
+    body {
+        flex-direction: column; /* Stack sidebar and main content */
+    }
     .sidebar {
         width: 100%;
         height: auto;
@@ -451,10 +602,15 @@ input:focus, select:focus {
         justify-content: space-around;
         align-items: center;
         margin-bottom: 20px;
+        box-shadow: var(--shadow-light);
+        z-index: 100;
+        flex-wrap: wrap;
     }
     .sidebar .logo {
         margin-bottom: 0;
         font-size: 1.5em;
+        flex: 1;
+        text-align: right;
     }
     .sidebar .nav-list {
         display: none; /* Hide full nav list on small screens */
