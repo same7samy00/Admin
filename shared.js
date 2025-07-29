@@ -135,71 +135,62 @@ function listenToScannerSession(callback) {
     scannerSessionListenerUnsubscribe = onSnapshot(scannerSessionDocRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            
-            // تحقق مما إذا كانت الحالة "scanned" ولقد تم مسح قيمة جديدة
+            console.log("shared.js: Scanner session data received:", data); // تتبع إضافي
+
+            // تحقق مما إذا كانت الحالة "scanned" ولقد تم مسح قيمة جديدة (غير فارغة)
             // ونقوم بالتحقق من أن القيمة ليست هي نفسها التي تم معالجتها آخر مرة
-            // يتم أيضاً التحقق من أن القيمة الممسوحة ليست null/undefined
-            if (data.status === 'scanned' && data.scannedValue !== null && data.scannedValue !== undefined) {
-                // إذا كانت القيمة مختلفة عن آخر قيمة تمت معالجتها
-                if (data.scannedValue !== lastProcessedScannedValue) {
-                    console.log("New scanned value detected:", data.scannedValue); // للمساعدة في التتبع
-                    lastProcessedScannedValue = data.scannedValue; // تحديث آخر قيمة تم معالجتها
+            if (data.status === 'scanned' && data.scannedValue && data.scannedValue !== lastProcessedScannedValue) {
+                console.log("shared.js: Processing new scanned value:", data.scannedValue, "for purpose:", data.purpose);
+                lastProcessedScannedValue = data.scannedValue; // تحديث آخر قيمة تم معالجتها
 
-                    // استدعاء الـ callback مع القيمة الممسوحة والغرض
-                    callback(data.scannedValue, data.purpose); 
-                    
-                    // إعادة تعيين الحالة في Firestore بعد المعالجة للسماح بمسح جديد
-                    // هذا مهم لضمان أن التغييرات المستقبلية في الماسح الضوئي سيتم اكتشافها
-                    updateDoc(scannerSessionDocRef, {
-                        status: 'readyForNextScan', // إعادة تعيين الحالة
-                        scannedValue: null,          // مسح القيمة الممسوحة القديمة
-                        purpose: null                // مسح الغرض القديم
-                    }).then(() => {
-                        console.log("Scanner session status reset to readyForNextScan in Firestore.");
-                        // لا داعي لمسح lastProcessedScannedValue هنا، سيتم مسحه عندما يتم تغيير حالته في Firestore
-                    }).catch(e => console.error("Error resetting scanner status in Firestore:", e));
-                } else {
-                    console.log("Scanned value is the same as last processed, ignoring.", data.scannedValue);
-                    // إذا كانت نفس القيمة، لكنها لا تزال 'scanned'، قد يعني أن إعادة التعيين لم تحدث بعد
-                    // يمكننا محاولة إعادة التعيين مرة أخرى لضمان الاستمرارية
-                    if (data.status === 'scanned') {
-                        updateDoc(scannerSessionDocRef, {
-                            status: 'readyForNextScan',
-                            scannedValue: null,
-                            purpose: null
-                        }).catch(e => console.error("Error re-resetting scanner status:", e));
-                    }
-                }
+                // استدعاء الـ callback مع القيمة الممسوحة والغرض
+                callback(data.scannedValue, data.purpose); 
+                
+                // إعادة تعيين الحالة في Firestore بعد المعالجة للسماح بمسح جديد
+                // مهم جداً أن يتم هذا لـ scanner_only.html ليعرف أنه يمكنه إرسال نفس الكود مرة أخرى
+                updateDoc(scannerSessionDocRef, {
+                    status: 'readyForNextScan', // إعادة تعيين الحالة
+                    scannedValue: null,          // مسح القيمة الممسوحة القديمة
+                    purpose: null                // مسح الغرض القديم
+                }).then(() => {
+                    console.log("shared.js: Scanner session status reset to readyForNextScan in Firestore.");
+                    // هنا لا نقوم بمسح lastProcessedScannedValue مباشرة، نعتمد على scanner_only.html لإعادة تعيينه
+                }).catch(e => console.error("shared.js: Error resetting scanner status in Firestore:", e));
 
+            } else if (data.status === 'readyForNextScan' && lastProcessedScannedValue !== null) {
+                // هذا الجزء يضمن مسح lastProcessedScannedValue في shared.js
+                // فقط بعد أن يتم تأكيد أن الحالة هي readyForNextScan
+                // وأننا قمنا بمعالجة كود ما سابقاً
+                console.log("shared.js: Received readyForNextScan, clearing lastProcessedScannedValue.");
+                lastProcessedScannedValue = null; 
             } else if (data.status === 'phoneReady') {
                 showNotification("الماسح الضوئي متصل وجاهز للاستخدام.", "info", 3000);
             }
         }
     }, (error) => {
-        console.error("Error listening to scanner session:", error);
+        console.error("shared.js: Error listening to scanner session:", error);
         showNotification("خطأ في الاتصال بالماسح الضوئي.", "error");
     });
 }
 
 /**
  * يرسل "غرض" المسح الضوئي إلى Firestore ليقرأه الماسح الضوئي.
- * لا يتوقع هذا الطلب أن يبدأ الماسح الضوئي، بل فقط لإبلاغه بالنية.
  * @param {string} purpose - الغرض من المسح (مثل 'search' أو 'add_new').
  */
 async function requestScan(purpose) {
     try {
-        // تحديث الغرض في مستند الجلسة.
+        // نضع حالة "طلب المسح" هنا، ليس لطلب بدء المسح، ولكن لإعطاء إشارة للماسح
+        // بأنه يجب أن يكون مستعدًا لإرسال الكود مع هذا الغرض.
+        // الماسح الضوئي نفسه (scanner_only.html) يعمل بشكل مستمر.
         await updateDoc(scannerSessionDocRef, {
             purpose: purpose,
             requestedAt: new Date(),
-            // نضع حالة "طلب المسح" هنا، ليس لطلب بدء المسح، ولكن لإعطاء إشارة للماسح
-            // بأنه يجب أن يكون مستعدًا لإرسال الكود مع هذا الغرض.
-            // الماسح الضوئي نفسه (scanner_only.html) يعمل بشكل مستمر.
             status: 'scanRequested' 
         });
         showNotification(`تم تعيين غرض المسح إلى: ${purpose}. امسح الكود الآن على جهاز الماسح.`, "info", 4000);
+        console.log("shared.js: Sent scan request with purpose:", purpose);
     } catch (e) {
-        console.error("Error sending scan purpose:", e);
+        console.error("shared.js: Error sending scan purpose:", e);
         showNotification("فشل إرسال غرض المسح الضوئي.", "error");
     }
 }
