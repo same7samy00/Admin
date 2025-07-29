@@ -6,45 +6,7 @@
     <title>إضافة/تعديل منتج - شيخ العرب</title>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
-    <style>
-        /* Notification styles (copied from shared.js context or main style.css if global) */
-        #notification-container {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .notification {
-            background-color: #333;
-            color: #fff;
-            padding: 10px 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            opacity: 0;
-            transform: translateY(-20px);
-            transition: opacity 0.3s ease, transform 0.3s ease;
-            min-width: 250px;
-            text-align: center;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-        .notification.show {
-            opacity: 1;
-            transform: translateY(0);
-        }
-        .notification.success { background-color: #4CAF50; }
-        .notification.error { background-color: #f44336; }
-        .notification.warning { background-color: #ff9800; }
-        .notification i { font-size: 1.2em; }
-    </style>
-</head>
+    <link rel="stylesheet" href="style.css"> </head>
 <body class="form-page-body">
     <div class="add-product-container content-wrapper">
         <div class="add-product-header page-header">
@@ -117,7 +79,7 @@
 
     <div id="notification-container"></div>
     <script type="module">
-        // استيراد الوظائف المشتركة من shared.js
+        // Import shared functions and Firebase dependencies
         import { 
             db, 
             showNotification, 
@@ -126,9 +88,9 @@
             canAddProducts, 
             canEditProducts, 
             loadSettings 
-        } from './shared.js'; // تأكد من المسار الصحيح لـ shared.js
+        } from './shared.js'; 
 
-        import { collection, addDoc, doc, updateDoc, getDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+        import { collection, addDoc, doc, updateDoc, getDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js"; // Updated SDK version
 
         const pageTitle = document.getElementById('pageTitle');
         const saveBtn = document.getElementById('saveProductBtn');
@@ -144,7 +106,7 @@
             barcode: { input: document.getElementById('productBarcode'), error: document.getElementById('productBarcodeError') }
         };
 
-        function checkInitialPermissions() {
+        function checkInitialPermissionsAndRedirect() {
             if (editingProductId && !canEditProducts()) {
                 showNotification("ليس لديك صلاحية لتعديل المنتجات.", "error");
                 setTimeout(() => window.location.href = 'inventory.html', 1500);
@@ -166,10 +128,17 @@
             }
         }
 
+        // Event listener for custom 'settingsUpdated' event from shared.js
+        document.addEventListener('settingsUpdated', () => {
+            checkInitialPermissionsAndRedirect();
+            updateSaveButtonPermissions();
+        });
+
         document.addEventListener('DOMContentLoaded', () => {
-            loadSettings(); // ابدأ الاستماع لتحديثات الإعدادات
-            checkInitialPermissions(); // التحقق الأولي من الأذونات بناءً على الإعدادات الافتراضية أو التي تم تحميلها أولاً
-            updateSaveButtonPermissions(); // تحديث حالة زر الحفظ
+            loadSettings(); // Start listening to settings updates
+            checkInitialPermissionsAndRedirect(); // Initial check based on default/first loaded settings
+            updateSaveButtonPermissions(); // Initial update for save button
+            loadProductForEdit(); // Load product data if in edit mode
         });
 
         function validateForm() {
@@ -281,8 +250,6 @@
             pageTitle.textContent = 'تعديل المنتج';
             saveBtn.textContent = 'حفظ التعديلات';
 
-            // حالة زر الحفظ سيتم تحديثها بواسطة updateSaveButtonPermissions
-            
             try {
                 const docRef = doc(db, "products", editingProductId);
                 const docSnap = await getDoc(docRef);
@@ -313,8 +280,6 @@
                 showNotification(`تم استلام الباركود: ${scannedValue}`, 'success');
             }
         });
-        
-        loadProductForEdit();
     </script>
 </body>
 </html>
