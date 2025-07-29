@@ -203,7 +203,6 @@
                         currentPurpose = data.purpose; 
                         startScanner(); 
                     } else if (data.status === "processed" && isScanning) {
-                        // إذا تم معالجة الكود من قبل الصفحة الرئيسية، أوقف الماسح
                         stopScanner();
                         updateUI('الماسح في وضع الخمول. ينتظر طلب مسح جديد.');
                     } else if (data.status === "idle" && isScanning) { 
