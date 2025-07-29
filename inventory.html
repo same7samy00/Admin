@@ -27,7 +27,7 @@
                 <h1>إدارة المخزون</h1>
                 <div class="action-buttons">
                     <a href="add_product.html" class="btn btn-primary" id="addProductBtn"><i class="ri-add-line"></i><span>إضافة منتج</span></a>
-                    <button class="btn btn-secondary" id="requestScanForSearchBtn"><i class="ri-qr-code-line"></i><span>مسح للبحث</span></button>
+                    <button class="btn btn-secondary" id="requestScanForSearchBtn"><i class="ri-qr-code-line"></i><span>مسح للبحث (بالهاتف)</span></button>
                 </div>
             </div>
 
@@ -96,7 +96,9 @@
             canDeleteProducts, 
             loadSettings, 
             canAccessSalesHistory, 
-            canAccessSettings
+            canAccessSettings,
+            requestScan, // تم استيرادها
+            listenToScannerSession // تم استيرادها
         } from './shared.js'; 
 
         import { collection, getDocs, doc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
@@ -208,30 +210,21 @@
         searchInput.addEventListener('input', () => renderProducts());
         categorySelect.addEventListener('change', () => renderProducts());
         
-        // ***** وظيفة فتح الماسح والاستماع لرسالة *****
+        // ***** وظيفة طلب المسح والاستماع لـ Firestore *****
         requestScanForSearchBtn.addEventListener('click', () => {
-            // فتح الماسح في نافذة منبثقة أو علامة تبويب جديدة
-            window.open('scanner_only.html?purpose=search', '_blank', 'width=450,height=550,toolbar=no,location=no,status=no,menubar=no,scrollbars=no,resizable=yes');
-            showNotification("تم فتح الماسح الضوئي. يرجى مسح الكود.", "info");
+            requestScan('search'); // طلب المسح لغرض البحث
         });
 
-        // الاستماع لرسائل من النافذة المنبثقة (الماسح الضوئي)
-        window.addEventListener('message', (event) => {
-            // تأكد من أن الرسالة تأتي من مصدر موثوق به (نفس النطاق أو نطاق محدد)
-            if (event.origin !== window.location.origin) {
-                console.warn("Received message from untrusted origin:", event.origin);
-                return;
-            }
-
-            const data = event.data;
-            if (data && data.type === 'scannedBarcode' && data.purpose === 'search') {
-                searchInput.value = data.value; // تحديث حقل البحث
+        // الاستماع لنتائج المسح من Firestore
+        listenToScannerSession((scannedValue, purpose) => {
+            if (purpose === 'search') {
+                searchInput.value = scannedValue; // تحديث حقل البحث
                 renderProducts(); // بدء البحث
-                showNotification(`تم البحث عن: ${data.value}`, 'success');
-                console.log("Received barcode from scanner:", data.value);
+                showNotification(`تم البحث عن: ${scannedValue}`, 'success');
+                console.log("Received barcode from scanner via Firestore:", scannedValue);
             }
         });
-        // ***** نهاية وظيفة فتح الماسح والاستماع لرسالة *****
+        // ***** نهاية وظيفة طلب المسح والاستماع لـ Firestore *****
 
         function updateNavigationPermissions() {
             if (!canAccessSalesHistory()) {
