@@ -115,7 +115,7 @@
 
         async function onScanSuccess(decodedText, decodedResult) {
             const currentTimestamp = Date.now();
-            if (currentTimestamp - lastHandledScanTimestamp < 1000) { // زيادة الفاصل الزمني قليلاً
+            if (currentTimestamp - lastHandledScanTimestamp < 1000) { // 1 ثانية فاصل زمني لمنع التكرار
                 console.warn("Scanner: Ignoring rapid duplicate scan attempt.");
                 return;
             }
@@ -203,6 +203,7 @@
                         currentPurpose = data.purpose; 
                         startScanner(); 
                     } else if (data.status === "processed" && isScanning) {
+                        // إذا تم معالجة الكود من قبل الصفحة الرئيسية، أوقف الماسح
                         stopScanner();
                         updateUI('الماسح في وضع الخمول. ينتظر طلب مسح جديد.');
                     } else if (data.status === "idle" && isScanning) { 
