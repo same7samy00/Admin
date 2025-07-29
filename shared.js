@@ -23,7 +23,7 @@ const analytics = getAnalytics(app);
 // *** متغيرات خاصة بجلسة الماسح الضوئي (مهمة جداً) ***
 const SCANNER_SESSION_ID = "myScannerSession123"; 
 const scannerSessionDocRef = doc(db, "scannerSessions", SCANNER_SESSION_ID);
-let lastProcessedScannedValue = null; // تم تعريف المتغير هنا مرة واحدة فقط
+let lastProcessedScannedValue = null; // لتجنب معالجة نفس القيمة مرتين
 
 // الإعدادات الافتراضية للأذونات
 let currentSettings = {
@@ -58,18 +58,19 @@ function loadSettings() {
     });
 }
 
-// *** وظيفة جديدة: للحصول على الإعدادات الحالية ***
+// *** وظيفة: للحصول على الإعدادات الحالية ***
 async function getSettings() {
     return new Promise(resolve => {
-        // إذا كان هناك تحديث قيد الانتظار أو لم يتم تحميل الإعدادات بعد
-        if (currentSettings.storeName === "شيخ العرب" && document.readyState !== 'complete') {
+        if (currentSettings && currentSettings.storeName !== "شيخ العرب" && document.readyState === 'complete') { 
+            // إذا كانت الإعدادات قد تم تحميلها بالفعل ومستند DOM جاهز، أعدها مباشرة
+            resolve(currentSettings);
+        } else {
+            // انتظر حتى يتم تشغيل حدث 'settingsUpdated' مرة واحدة على الأقل
             const handleSettingsLoaded = () => {
                 document.removeEventListener('settingsUpdated', handleSettingsLoaded);
                 resolve(currentSettings);
             };
             document.addEventListener('settingsUpdated', handleSettingsLoaded);
-        } else {
-            resolve(currentSettings);
         }
     });
 }
@@ -168,6 +169,7 @@ async function requestScan(purpose) {
 
 // وظيفة للاستماع إلى جلسة الماسح الضوئي (تستخدمها صفحات الكمبيوتر لاستقبال النتائج)
 function listenToScannerSession(callback) {
+    // إذا كان هناك مستمع موجود بالفعل، قم بإلغاء الاشتراك منه أولاً
     if (scannerSessionUnsubscribe) {
         scannerSessionUnsubscribe();
         console.log("shared.js: Unsubscribed from previous scanner session listener.");
@@ -181,6 +183,7 @@ function listenToScannerSession(callback) {
             // إذا كانت الحالة "scanned" ولقد تم مسح قيمة جديدة
             if (data.status === "scanned" && data.scannedValue && data.scannedValue !== lastProcessedScannedValue) {
                 lastProcessedScannedValue = data.scannedValue; 
+                console.log("shared.js: New scanned value detected - Value:", data.scannedValue, "Purpose:", data.purpose); 
                 callback(data.scannedValue, data.purpose); 
                 
                 // بعد المعالجة، يتم إعادة تعيين الحالة في Firestore لتجنب التكرار
@@ -189,12 +192,13 @@ function listenToScannerSession(callback) {
                     console.log("shared.js: Scanner session status reset to processed in Firestore.");
                     // لا مسح لـ lastProcessedScannedValue هنا، نعتمد على حالة processed في Firestore
                 }, 500); // تأخير نصف ثانية
+
             } else if (data.status === "processed" && lastProcessedScannedValue !== null) {
                 // إذا تلقينا تأكيد المعالجة، يمكننا مسح القيمة المخزنة
                 lastProcessedScannedValue = null;
                 console.log("shared.js: lastProcessedScannedValue reset from 'processed' status.");
-            } else if (data.status === "idle" || data.status === "phoneReady") {
-                console.log("Scanner is idle or ready.");
+            } else if (data.status === "idle" || data.status === "phoneReady" || data.status === "requested") { 
+                console.log(`shared.js: Scanner status is ${data.status}.`);
             }
 
         } else {
