@@ -5,6 +5,65 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ماسح QR - شيخ العرب</title>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js";
+        import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
+        
+        // تأكد أن هذه البيانات مطابقة تماماً لما هو في shared.js وفي Firebase Console
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY", 
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID",
+            measurementId: "YOUR_MEASUREMENT_ID"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        
+        // هذا الـ ID يجب أن يكون متطابقاً تماماً مع ما هو في shared.js
+        window.SCANNER_SESSION_ID_GLOBAL = "myScannerSession123"; 
+        window.scannerSessionDocRef_GLOBAL = doc(db, "scannerSessions", window.SCANNER_SESSION_ID_GLOBAL);
+        window.updateScannedValue_GLOBAL = async (value, purpose) => {
+            try {
+                await updateDoc(window.scannerSessionDocRef_GLOBAL, { 
+                    status: "scanned", 
+                    scannedValue: value, 
+                    purpose: purpose,
+                    timestamp: new Date()
+                });
+                console.log("Scanned value updated in Firestore:", value);
+            } catch (e) {
+                console.error("Error updating scanned value in Firestore:", e);
+                // يمكنك هنا عرض رسالة خطأ للمستخدم على صفحة الماسح
+            }
+        };
+
+        // الاستماع لحالة الجلسة من Firestore
+        onSnapshot(window.scannerSessionDocRef_GLOBAL, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                console.log("Scanner session status from Firestore:", data);
+                // إذا كانت الصفحة الرئيسية تطلب المسح، ابدأ الماسح
+                if (data.status === "requested" && !window.isScanning_GLOBAL) {
+                    window.purpose_GLOBAL = data.purpose; // حفظ الغرض
+                    window.startScanner_GLOBAL();
+                } else if (data.status === "processed" && window.isScanning_GLOBAL) {
+                    // إذا تم معالجة الكود من قبل الصفحة الرئيسية، أوقف الماسح
+                    window.stopScanner_GLOBAL();
+                    window.updateUI_GLOBAL('الماسح في وضع الخمول. ينتظر طلب مسح جديد.');
+                }
+            } else {
+                console.log("Scanner session document does not exist. Creating a default one.");
+                setDoc(window.scannerSessionDocRef_GLOBAL, { status: "idle", purpose: null, timestamp: new Date(), scannedValue: null }).catch(e => console.error("Error creating default scanner session:", e));
+            }
+        }, (error) => {
+            console.error("Error listening to scanner session in scanner_only.html:", error);
+            window.updateUI_GLOBAL('خطأ في الاتصال بقاعدة البيانات.', '', 'تأكد من اتصال الإنترنت وقواعد أمان Firebase.');
+        });
+
+    </script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         body {
@@ -23,7 +82,7 @@
         }
         #reader {
             width: 90vw;
-            max-width: 400px; /* حجم مناسب لنافذة منبثقة */
+            max-width: 400px;
             aspect-ratio: 1/1;
             border: 5px solid rgba(255, 255, 255, 0.2);
             border-radius: 24px;
@@ -33,7 +92,7 @@
         .status-message {
             font-size: 1.2em;
             font-weight: 600;
-            color: #4CAF50;
+            color: #fff; /* لون أبيض افتراضي */
         }
         .scanned-value {
             margin-top: 15px;
@@ -45,80 +104,79 @@
             color: #FF5252;
             margin-top: 15px;
         }
-        .close-button {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: none;
-            border: none;
+        .action-button {
+            background-color: #03A9F4;
             color: #fff;
-            font-size: 2em;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            margin-top: 15px;
             cursor: pointer;
+            font-size: 1em;
+        }
+        .action-button:hover {
+            background-color: #0288D1;
+        }
+        .action-button.danger {
+            background-color: #FF5252;
+        }
+        .action-button.danger:hover {
+            background-color: #D32F2F;
         }
     </style>
 </head>
 <body>
-    <button class="close-button" onclick="window.close()">&times;</button>
     <div id="reader"></div>
-    <p class="status-message" id="statusMessage">جاري تشغيل الماسح...</p>
+    <p class="status-message" id="statusMessage">جاري التحميل... ينتظر طلب مسح.</p>
     <p class="scanned-value" id="lastScannedValue"></p>
     <p class="error-message" id="errorMessage"></p>
+    <button class="action-button danger" id="stopScannerBtn" style="display: none;">إيقاف الماسح</button>
 
     <script type="text/javascript">
         const statusMessage = document.getElementById('statusMessage');
         const lastScannedValue = document.getElementById('lastScannedValue');
         const errorMessage = document.getElementById('errorMessage');
         const readerDiv = document.getElementById('reader');
+        const stopScannerBtn = document.getElementById('stopScannerBtn');
         
         let html5QrCode;
-        let isScanning = false;
-        let purpose = null; // الغرض الذي تم تمريره من الصفحة الأم
+        window.isScanning_GLOBAL = false; // متغير عام لتتبع حالة المسح
+        window.purpose_GLOBAL = null; // الغرض من المسح
 
-        function updateUI(message, value = '', error = '') {
+        // وظيفة تحديث الواجهة (متاحة عالمياً)
+        window.updateUI_GLOBAL = function(message, value = '', error = '') {
             statusMessage.textContent = message;
             lastScannedValue.textContent = value ? `آخر كود: ${value}` : '';
             errorMessage.textContent = error;
-            statusMessage.style.color = error ? '#FF5252' : '#4CAF50';
+            statusMessage.style.color = error ? '#FF5252' : (value ? '#4CAF50' : '#fff');
+            stopScannerBtn.style.display = window.isScanning_GLOBAL ? 'block' : 'none';
         }
 
         async function onScanSuccess(decodedText, decodedResult) {
-            updateUI('تم المسح بنجاح!', decodedText);
+            window.updateUI_GLOBAL('تم المسح بنجاح!', decodedText);
             
-            // إيقاف الكاميرا بعد المسح الناجح
-            if (html5QrCode && html5QrCode.isScanning) {
-                await html5QrCode.stop().catch(err => console.error("Error stopping scanner after scan:", err));
-                isScanning = false;
+            // إرسال الكود الممسوح والغرض إلى Firestore
+            if (window.updateScannedValue_GLOBAL) {
+                await window.updateScannedValue_GLOBAL(decodedText, window.purpose_GLOBAL);
             }
             
-            // إرسال الكود الممسوح والغرض إلى النافذة الأم (التي فتحت هذه النافذة)
-            if (window.opener) {
-                window.opener.postMessage({
-                    type: 'scannedBarcode', // نوع الرسالة لتحديدها في النافذة الأم
-                    value: decodedText,
-                    purpose: purpose
-                }, window.location.origin); // تأكد من أن origin صحيح لأمان أفضل
-                console.log("Sent scanned value to opener:", decodedText, "for purpose:", purpose);
-            }
-
-            // إغلاق النافذة بعد إرسال الكود
-            setTimeout(() => {
-                window.close();
-            }, 500); // تأخير بسيط لضمان إرسال الرسالة قبل الإغلاق
+            // لا توقف الماسح هنا تلقائياً، دعه يستمع لـ Firestore ليتم إيقافه من هناك
+            // (عندما تقوم الصفحة الرئيسية بتعيين status إلى "processed")
         }
         
         function onScanFailure(error) { 
-            // يتم استدعاء هذه الوظيفة بشكل متكرر. قم بتسجيل الأخطاء الحرجة فقط.
             if (error.includes("NotReadableError") || error.includes("ConstraintNotSatisfiedError")) {
-                updateUI('خطأ في الكاميرا', '', `الخطأ: ${error}`);
+                window.updateUI_GLOBAL('خطأ في الكاميرا', '', `الخطأ: ${error}`);
                 console.error("Critical scan failure:", error);
+                window.stopScanner_GLOBAL(); // أوقف الماسح في حالة الخطأ الحرج
             }
-            // لا نحاول إعادة التشغيل تلقائيًا هنا، لأننا نريدها أن تغلق.
         }
 
-        async function startScanner() {
-            if (html5QrCode && html5QrCode.isScanning) {
+        // وظيفة بدء الماسح (متاحة عالمياً)
+        window.startScanner_GLOBAL = async function() {
+            if (window.isScanning_GLOBAL) {
                 console.log("Scanner already running, not restarting.");
-                updateUI('الماسح جاهز وفي انتظار الكود...');
+                window.updateUI_GLOBAL('الماسح جاهز وفي انتظار الكود...');
                 return;
             }
 
@@ -128,34 +186,55 @@
             }
             try {
                 await html5QrCode.start(
-                    { facingMode: "environment" }, // يفضل الكاميرا الخلفية
-                    { fps: 10, qrbox: { width: 250, height: 250 } }, // إعدادات المسح
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: { width: 250, height: 250 } },
                     onScanSuccess,
                     onScanFailure
                 );
-                isScanning = true;
-                updateUI('الماسح جاهز وفي انتظار الكود...');
+                window.isScanning_GLOBAL = true;
+                window.updateUI_GLOBAL('الماسح جاهز وفي انتظار الكود...');
                 console.log("Scanner started successfully.");
             } catch (err) {
-                 updateUI('لا يمكن تشغيل الكاميرا', '', 'تأكد من إعطاء إذن الكاميرا وعدم استخدامها من قبل تطبيق آخر.');
+                 window.updateUI_GLOBAL('لا يمكن تشغيل الكاميرا', '', 'تأكد من إعطاء إذن الكاميرا وعدم استخدامها من قبل تطبيق آخر.');
                  console.error("Failed to start scanner:", err);
-                 // إذا فشل بدء التشغيل، يمكن إغلاق النافذة تلقائياً
-                 setTimeout(() => window.close(), 3000);
+                 window.isScanning_GLOBAL = false;
+                 readerDiv.style.display = 'none';
             }
         }
+
+        // وظيفة إيقاف الماسح (متاحة عالمياً)
+        window.stopScanner_GLOBAL = async function() {
+            if (html5QrCode && window.isScanning_GLOBAL) {
+                try {
+                    await html5QrCode.stop();
+                    window.isScanning_GLOBAL = false;
+                    readerDiv.style.display = 'none';
+                    window.updateUI_GLOBAL('الماسح متوقف.');
+                    console.log("Scanner stopped successfully.");
+                } catch (err) {
+                    console.error("Error stopping scanner:", err);
+                    window.updateUI_GLOBAL('فشل إيقاف الماسح.', '', 'قد تحتاج لإغلاق النافذة يدوياً.');
+                }
+            }
+        };
         
         document.addEventListener('DOMContentLoaded', () => {
-            // استخراج الغرض من URL Parameters عند فتح النافذة
-            const urlParams = new URLSearchParams(window.location.search);
-            purpose = urlParams.get('purpose');
-            console.log("Scanner opened with purpose:", purpose);
-
-            startScanner();
+            // لا تبدأ الماسح تلقائياً، انتظر طلب من Firestore
+            window.updateUI_GLOBAL('الماسح في وضع الخمول. ينتظر طلب مسح جديد.');
         });
 
-        // عند إغلاق النافذة (سواء يدوياً أو بعد المسح)، تأكد من إيقاف الكاميرا
+        stopScannerBtn.addEventListener('click', () => {
+            window.stopScanner_GLOBAL();
+            // يمكنك أيضاً تحديث حالة Firestore هنا إذا أردت إبلاغ الصفحة الرئيسية
+            // بأن الماسح تم إيقافه يدوياً
+            if (window.scannerSessionDocRef_GLOBAL) {
+                updateDoc(window.scannerSessionDocRef_GLOBAL, { status: "idle", purpose: null, scannedValue: null }).catch(e => console.error("Error updating scanner session status on manual stop:", e));
+            }
+        });
+
+        // عند إغلاق النافذة، تأكد من إيقاف الكاميرا
         window.addEventListener('beforeunload', () => {
-            if (html5QrCode && html5QrCode.isScanning) {
+            if (html5QrCode && window.isScanning_GLOBAL) {
                 html5QrCode.stop().catch(err => console.error("Error stopping scanner on unload:", err));
             }
         });
