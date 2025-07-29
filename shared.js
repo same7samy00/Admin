@@ -22,7 +22,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const analytics = getAnalytics(app);
 
-// معرف جلسة الماسح الضوئي المشترك - يجب أن يكون مطابقًا تماماً في qr_scanner.html
+// معرف جلسة الماسح الضوئي المشترك - يجب أن يكون مطابقًا تماماً في scanner_only.html
 const SHARED_SCANNER_SESSION_ID = "YOUR_STORE_UNIQUE_SCANNER_ID_12345";
 const scannerSessionDocRef = doc(db, 'scannerSessions', SHARED_SCANNER_SESSION_ID);
 
@@ -126,23 +126,32 @@ function canDeleteProducts() { return currentSettings.canDeleteProducts; }
 function canAccessSalesHistory() { return currentSettings.canAccessSalesHistory; }
 function canAccessSettings() { return currentSettings.canAccessSettings; }
 
-// منطق جلسة الماسح الضوئي (مخصص للتواصل مع qr_scanner.html)
+// منطق جلسة الماسح الضوئي (يتفاعل مع scanner_only.html الجديد)
 let scannerSessionListenerUnsubscribe = null;
+let lastKnownScannedValue = null; // لتتبع آخر قيمة ممسوحة ومنع التكرار
 
 function listenToScannerSession(callback) {
     if (scannerSessionListenerUnsubscribe) {
-        scannerSessionListenerUnsubscribe();
+        scannerSessionListenerUnsubscribe(); // إلغاء الاشتراك من المستمع السابق
     }
     scannerSessionListenerUnsubscribe = onSnapshot(scannerSessionDocRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            if (data.status === 'scanned' && data.scannedValue) {
-                callback(data.scannedValue, data.purpose);
+            // تحقق مما إذا كانت الحالة "scanned" ولقد تم مسح قيمة جديدة
+            if (data.status === 'scanned' && data.scannedValue && data.scannedValue !== lastKnownScannedValue) {
+                lastKnownScannedValue = data.scannedValue; // تحديث آخر قيمة معروفة
+                callback(data.scannedValue, data.purpose); // 'purpose' سيأتي من requestScan
+                
+                // إعادة تعيين الحالة في Firestore بعد المعالجة للسماح بمسح جديد
+                // هذا مهم لضمان أن التغييرات المستقبلية في الماسح الضوئي سيتم اكتشافها
                 updateDoc(scannerSessionDocRef, {
                     status: 'readyForNextScan',
-                    scannedValue: null,
+                    scannedValue: null, // مسح القيمة الممسوحة القديمة
                     purpose: null
-                }).catch(e => console.error("Error resetting scanner status:", e));
+                }).catch(e => console.error("Error resetting scanner status in Firestore:", e));
+            } else if (data.status === 'phoneReady') {
+                // إذا كان الماسح الضوئي أصبح جاهزًا بعد أن كان غير متصل
+                showNotification("الماسح الضوئي متصل وجاهز للاستخدام.", "info", 3000);
             }
         }
     }, (error) => {
@@ -151,23 +160,23 @@ function listenToScannerSession(callback) {
     });
 }
 
+/**
+ * يرسل "غرض" المسح الضوئي إلى Firestore ليقرأه الماسح الضوئي.
+ * لا يتوقع هذا الطلب أن يبدأ الماسح الضوئي، بل فقط لإبلاغه بالنية.
+ * @param {string} purpose - الغرض من المسح (مثل 'search' أو 'add_new').
+ */
 async function requestScan(purpose) {
     try {
-        const docSnap = await getDoc(scannerSessionDocRef); // تم حل مشكلة getDoc is not defined هنا
-        if (docSnap.exists() && (docSnap.data().status === 'phoneReady' || docSnap.data().status === 'readyForNextScan')) {
-            await setDoc(scannerSessionDocRef, {
-                status: 'scanRequested',
-                purpose: purpose,
-                requestedAt: new Date()
-            }, { merge: true });
-            showNotification("تم إرسال طلب المسح الضوئي إلى جهاز QR.", "info");
-        } else {
-            showNotification("الماسح الضوئي غير جاهز أو غير متصل. يرجى فتح صفحة الماسح.", "warning", 5000);
-            console.warn("Scanner not ready. Current status:", docSnap.exists() ? docSnap.data().status : 'Document not found');
-        }
+        // تحديث الغرض في مستند الجلسة.
+        // لا نتحقق من حالة الماسح الضوئي هنا، الماسح الضوئي سيعمل باستمرار.
+        await updateDoc(scannerSessionDocRef, {
+            purpose: purpose,
+            requestedAt: new Date()
+        });
+        showNotification(`تم تعيين غرض المسح إلى: ${purpose}. امسح الكود الآن على جهاز الماسح.`, "info", 4000);
     } catch (e) {
-        console.error("Error requesting scan:", e);
-        showNotification("فشل إرسال طلب المسح الضوئي.", "error");
+        console.error("Error sending scan purpose:", e);
+        showNotification("فشل إرسال غرض المسح الضوئي.", "error");
     }
 }
 
