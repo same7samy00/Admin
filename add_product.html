@@ -79,7 +79,7 @@
 
     <div id="notification-container"></div>
     <script type="module">
-        // Import shared functions and Firebase dependencies
+        // استيراد الوظائف المشتركة من shared.js
         import { 
             db, 
             showNotification, 
@@ -90,7 +90,7 @@
             loadSettings 
         } from './shared.js'; 
 
-        import { collection, addDoc, doc, updateDoc, getDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js"; // Updated SDK version
+        import { collection, addDoc, doc, updateDoc, getDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
 
         const pageTitle = document.getElementById('pageTitle');
         const saveBtn = document.getElementById('saveProductBtn');
@@ -124,21 +124,20 @@
                 saveBtn.disabled = true;
                 showNotification("ليس لديك صلاحية لإضافة منتجات. لا يمكن حفظ المنتج.", "error");
             } else {
-                saveBtn.disabled = false; // Enable if permissions are met
+                saveBtn.disabled = false;
             }
         }
 
-        // Event listener for custom 'settingsUpdated' event from shared.js
         document.addEventListener('settingsUpdated', () => {
             checkInitialPermissionsAndRedirect();
             updateSaveButtonPermissions();
         });
 
         document.addEventListener('DOMContentLoaded', () => {
-            loadSettings(); // Start listening to settings updates
-            checkInitialPermissionsAndRedirect(); // Initial check based on default/first loaded settings
-            updateSaveButtonPermissions(); // Initial update for save button
-            loadProductForEdit(); // Load product data if in edit mode
+            loadSettings();
+            checkInitialPermissionsAndRedirect();
+            updateSaveButtonPermissions();
+            loadProductForEdit();
         });
 
         function validateForm() {
