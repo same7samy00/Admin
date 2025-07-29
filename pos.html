@@ -206,7 +206,7 @@
         const changeDueSpan = document.getElementById('changeDue');
         const completeSaleBtn = document.getElementById('completeSaleBtn');
         const cancelSaleBtn = document.getElementById('cancelSaleBtn');
-        const openScannerSourceModalBtn = document.getElementById('openScannerSourceModalBtn'); // تغيير اسم الزر
+        const openScannerSourceModalBtn = document.getElementById('openScannerSourceModalBtn'); 
         const printInvoiceBtn = document.getElementById('printInvoiceBtn');
         const viewSalesHistoryBtn = document.getElementById('viewSalesHistoryBtn');
         const salesHistoryLink = document.getElementById('salesHistoryLink');
@@ -226,6 +226,7 @@
             try {
                 const productQuerySnapshot = await getDocs(collection(db, "products"));
                 allProducts = productQuerySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                console.log("Fetched all products successfully for POS:", allProducts); // أضف هذا السطر
             } catch (e) {
                 console.error("Error fetching products:", e);
                 showNotification("خطأ في تحميل المنتجات.", "error");
@@ -573,6 +574,7 @@
 
         // الاستماع لنتائج المسح من Firestore
         listenToScannerSession((scannedValue, purpose) => {
+            console.log("pos.html: Callback triggered! Scanned Value:", scannedValue, "Purpose:", purpose); // أضف هذا
             if (purpose === 'pos_scan' && scannedValue) {
                 productSearchInput.value = scannedValue;
                 showNotification(`تم مسح الباركود: ${scannedValue}`, 'success', 1500);
@@ -583,9 +585,13 @@
                     productSearchInput.value = '';
                     searchResultsDiv.innerHTML = '';
                     searchResultsDiv.style.display = 'none';
+                    console.log("pos.html: Product added to cart by scan."); // أضف هذا
                 } else {
                     showNotification("المنتج غير موجود في المخزون.", "error");
+                    console.log("pos.html: Product not found for scanned barcode."); // أضف هذا
                 }
+            } else {
+                console.log("pos.html: Purpose mismatch or no scanned value in callback."); // أضف هذا
             }
         });
 
@@ -648,12 +654,10 @@
             }
         }
 
-        // ملاحظة: يتم استدعاء loadSettings() في نهاية DOMContentLoaded
-        // listenToScannerSession يتم استدعاؤها في نهاية DOMContentLoaded
         document.addEventListener('DOMContentLoaded', () => {
             loadSettings(); 
             fetchAllProducts();
-            loadInvoiceSettings(); // هذه الآن async وستنتظر الإعدادات
+            loadInvoiceSettings(); 
             updateNavigationPermissions();
             listenToScannerSession(() => {}); 
         });
