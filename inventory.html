@@ -363,10 +363,10 @@
         });
 
         document.addEventListener('DOMContentLoaded', () => {
-            loadSettings(); 
-            fetchAllProducts(); 
-            listenToScannerSession(() => {}); 
-        });
+    loadSettings(); 
+    fetchProducts(); // <-- هكذا يجب أن يكون
+    listenToScannerSession(() => {}); 
+});
 
         document.getElementById('logoutButton').addEventListener('click', () => {
             showNotification('تم تسجيل الخروج بنجاح!', 'success');
