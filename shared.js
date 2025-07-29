@@ -23,7 +23,7 @@ const analytics = getAnalytics(app);
 // *** متغيرات خاصة بجلسة الماسح الضوئي (مهمة جداً) ***
 const SCANNER_SESSION_ID = "myScannerSession123"; 
 const scannerSessionDocRef = doc(db, "scannerSessions", SCANNER_SESSION_ID);
-let lastProcessedScannedValue = null; 
+let lastProcessedScannedValue = null; // لتجنب معالجة نفس القيمة مرتين
 
 // الإعدادات الافتراضية للأذونات
 let currentSettings = {
@@ -127,6 +127,8 @@ function canAccessSettings() { return currentSettings.canAccessSettings; }
 
 // *** وظائف الماسح الضوئي باستخدام Firestore ***
 
+let scannerSessionUnsubscribe = null; // لكي نتمكن من إلغاء الاشتراك من المستمع
+
 // وظيفة لطلب المسح (تستخدمها صفحات الكمبيوتر لفتح الماسح ولإرسال الغرض)
 async function requestScan(purpose) {
     try {
@@ -138,10 +140,8 @@ async function requestScan(purpose) {
             scannedValue: null // مسح القيمة السابقة
         });
         console.log("Scan requested for purpose:", purpose);
-        showNotification(`تم إرسال طلب المسح. افتح صفحة الماسح وقم بالمسح.`, "info", 5000);
-        
-        // يمكنك فتح نافذة الماسح هنا إذا كنت تتوقعها على نفس الجهاز
-        // window.open('scanner_only.html', '_blank', 'width=450,height=550,toolbar=no,location=no,status=no,menubar=no,scrollbars=no,resizable=yes');
+        // الاشعارات ستكون منبثقة من المودال نفسه، وليس هنا مباشرة
+        // showNotification(`تم إرسال طلب المسح. افتح صفحة الماسح وقم بالمسح.`, "info", 5000);
         
     } catch (e) {
         console.error("Error requesting scan:", e);
@@ -151,29 +151,40 @@ async function requestScan(purpose) {
 
 // وظيفة للاستماع إلى جلسة الماسح الضوئي (تستخدمها صفحات الكمبيوتر لاستقبال النتائج)
 function listenToScannerSession(callback) {
-    onSnapshot(scannerSessionDocRef, (docSnap) => {
+    // إذا كان هناك مستمع موجود بالفعل، قم بإلغاء الاشتراك منه أولاً
+    if (scannerSessionUnsubscribe) {
+        scannerSessionUnsubscribe();
+        console.log("shared.js: Unsubscribed from previous scanner session listener.");
+    }
+
+    scannerSessionUnsubscribe = onSnapshot(scannerSessionDocRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
             console.log("shared.js: Scanner session data received:", data);
             
             // إذا كانت الحالة "scanned" ولقد تم مسح قيمة جديدة
             if (data.status === "scanned" && data.scannedValue && data.scannedValue !== lastProcessedScannedValue) {
-                lastProcessedScannedValue = data.scannedValue; // تحديث القيمة المعالجة
-                callback(data.scannedValue, data.purpose); // استدعاء الكولباك في الصفحة الرئيسية
+                lastProcessedScannedValue = data.scannedValue; 
+                callback(data.scannedValue, data.purpose); 
                 
                 // بعد المعالجة، يتم إعادة تعيين الحالة في Firestore لتجنب التكرار
-                updateDoc(scannerSessionDocRef, { status: "processed", scannedValue: null }).catch(e => console.error("Error updating scanner session status:", e));
+                // التأخير هنا مهم لضمان أن الصفحة الرئيسية لديها وقت لمعالجة الكود
+                setTimeout(async () => {
+                    await updateDoc(scannerSessionDocRef, { status: "processed", scannedValue: null }).catch(e => console.error("Error updating scanner session status:", e));
+                    console.log("shared.js: Scanner session status reset to processed in Firestore.");
+                    // يمكن مسح lastProcessedScannedValue هنا أيضاً
+                    lastProcessedScannedValue = null; 
+                }, 500); // تأخير نصف ثانية
             } else if (data.status === "processed" && lastProcessedScannedValue !== null) {
                 // إذا تلقينا تأكيد المعالجة، يمكننا مسح القيمة المخزنة
                 lastProcessedScannedValue = null;
                 console.log("shared.js: lastProcessedScannedValue reset.");
             } else if (data.status === "idle" || data.status === "phoneReady") {
-                // قد لا تحتاج رسالة لكل حالة خمول إذا كانت مزعجة
                 console.log("Scanner is idle or ready.");
             }
 
         } else {
-            console.log("Scanner session document does not exist. Creating a default one.");
+            console.log("shared.js: Scanner session document does not exist. Creating a default one.");
             setDoc(scannerSessionDocRef, { status: "idle", purpose: null, timestamp: new Date(), scannedValue: null }).catch(e => console.error("Error creating default scanner session:", e));
         }
     }, (error) => {
