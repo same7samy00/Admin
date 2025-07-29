@@ -366,11 +366,12 @@
             updateNavigationPermissions(); 
         });
 
-        document.addEventListener('DOMContentLoaded', () => {
-            loadSettings(); 
-            fetchAllProducts(); // تم تصحيح fetchProducts
-            listenToScannerSession(() => {}); 
-        });
+   document.addEventListener('DOMContentLoaded', () => {
+        loadSettings(); 
+        // تأكد أن هذا هو fetchProducts وليس fetchAllProducts
+        fetchProducts(); // هذا هو السطر الذي يجب أن يكون
+        listenToScannerSession(() => {}); 
+    });
 
         document.getElementById('logoutButton').addEventListener('click', () => {
             showNotification('تم تسجيل الخروج بنجاح!', 'success');
