@@ -6,7 +6,8 @@
     <title>إدارة المخزون - شيخ العرب</title>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
-    <link rel="stylesheet" href="style.css"> </head>
+    <link rel="stylesheet" href="style.css">
+</head>
 <body>
     <aside class="sidebar">
         <div class="logo" id="storeLogo">شيخ <span>العرب</span></div>
@@ -86,7 +87,6 @@
     </div>
 
     <script type="module">
-        // استيراد الوظائف المشتركة من shared.js
         import { 
             db, 
             showNotification, 
@@ -213,10 +213,11 @@
             requestScan('search');
         });
         
+        // هنا يتم الاستماع للماسح الضوئي وتحديث حقل البحث
         listenToScannerSession((scannedValue, purpose) => {
             if (purpose === 'search' && scannedValue) {
-                searchInput.value = scannedValue;
-                renderProducts();
+                searchInput.value = scannedValue; // تحديث حقل البحث
+                renderProducts(); // إعادة عرض المنتجات بالبحث الجديد
                 showNotification(`تم البحث عن: ${scannedValue}`, 'success');
             }
         });
