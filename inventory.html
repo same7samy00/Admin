@@ -7,6 +7,78 @@
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* Styles for the new scanner source modal */
+        .scanner-source-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1002; /* Above other modals if any */
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .scanner-source-modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .scanner-source-modal {
+            background-color: #fff;
+            color: var(--text-dark);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 450px;
+            width: 90%;
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+            position: relative; /* لزر الإغلاق */
+        }
+        .scanner-source-modal-overlay.show .scanner-source-modal {
+            transform: scale(1);
+        }
+        .scanner-source-modal h3 {
+            margin-top: 0;
+            margin-bottom: 25px;
+            font-size: 1.5em;
+        }
+        .scanner-source-modal .modal-options {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .scanner-source-modal .modal-options button {
+            width: 100%;
+            font-size: 1.1em;
+            padding: 15px;
+        }
+        .scanner-source-modal .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            font-size: 1.8em;
+            color: var(--secondary-color);
+            cursor: pointer;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .scanner-source-modal .close-btn:hover {
+            background-color: var(--bg-light);
+        }
+    </style>
 </head>
 <body>
     <aside class="sidebar">
@@ -27,7 +99,7 @@
                 <h1>إدارة المخزون</h1>
                 <div class="action-buttons">
                     <a href="add_product.html" class="btn btn-primary" id="addProductBtn"><i class="ri-add-line"></i><span>إضافة منتج</span></a>
-                    <button class="btn btn-secondary" id="requestScanForSearchBtn"><i class="ri-qr-code-line"></i><span>مسح للبحث</span></button>
+                    <button class="btn btn-secondary" id="openScannerSourceModalBtn"><i class="ri-qr-code-line"></i><span>مسح للبحث</span></button>
                 </div>
             </div>
 
@@ -86,6 +158,21 @@
         </div>
     </div>
 
+    <div class="scanner-source-modal-overlay" id="scannerSourceModalOverlay">
+        <div class="scanner-source-modal">
+            <button class="close-btn" id="closeScannerSourceModal">&times;</button>
+            <h3>اختر مصدر المسح</h3>
+            <div class="modal-options">
+                <button class="btn btn-primary" id="scanFromThisDeviceBtn">
+                    <i class="ri-qr-code-line"></i> مسح من هذا الجهاز
+                </button>
+                <button class="btn btn-secondary" id="scanFromOtherDeviceBtn">
+                    <i class="ri-smartphone-line"></i> مسح من الهاتف/جهاز آخر
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { 
             db, 
@@ -98,7 +185,8 @@
             canAccessSalesHistory, 
             canAccessSettings,
             requestScan, 
-            listenToScannerSession 
+            listenToScannerSession,
+            SCANNER_SESSION_ID // تم استيرادها
         } from './shared.js'; 
 
         import { collection, getDocs, doc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
@@ -109,7 +197,11 @@
         const addProductBtn = document.getElementById('addProductBtn');
         const salesHistoryLink = document.getElementById('salesHistoryLink');
         const settingsLink = document.getElementById('settingsLink');
-        const requestScanForSearchBtn = document.getElementById('requestScanForSearchBtn');
+        const openScannerSourceModalBtn = document.getElementById('openScannerSourceModalBtn'); // زر فتح المودال الجديد
+        const scannerSourceModalOverlay = document.getElementById('scannerSourceModalOverlay');
+        const closeScannerSourceModal = document.getElementById('closeScannerSourceModal');
+        const scanFromThisDeviceBtn = document.getElementById('scanFromThisDeviceBtn');
+        const scanFromOtherDeviceBtn = document.getElementById('scanFromOtherDeviceBtn');
 
         let allProducts = [];
 
@@ -210,12 +302,36 @@
         searchInput.addEventListener('input', () => renderProducts());
         categorySelect.addEventListener('change', () => renderProducts());
         
-        // ***** وظيفة طلب المسح والاستماع لـ Firestore *****
-        requestScanForSearchBtn.addEventListener('click', () => {
+        // ***** منطق فتح مودال اختيار مصدر المسح *****
+        openScannerSourceModalBtn.addEventListener('click', () => {
+            scannerSourceModalOverlay.classList.add('show');
+        });
+
+        closeScannerSourceModal.addEventListener('click', () => {
+            scannerSourceModalOverlay.classList.remove('show');
+        });
+
+        scanFromThisDeviceBtn.addEventListener('click', () => {
+            scannerSourceModalOverlay.classList.remove('show');
             requestScan('search'); // طلب المسح لغرض البحث
-            // فتح نافذة الماسح هنا (سواء على نفس الجهاز أو كتذكير لفتحها على الهاتف)
+            // فتح نافذة الماسح على نفس الجهاز
             window.open('scanner_only.html', '_blank', 'width=450,height=550,toolbar=no,location=no,status=no,menubar=no,scrollbars=no,resizable=yes');
         });
+
+        scanFromOtherDeviceBtn.addEventListener('click', () => {
+            scannerSourceModalOverlay.classList.remove('show');
+            requestScan('search'); // طلب المسح لغرض البحث
+            const scannerLink = `${window.location.origin}/scanner_only.html?sessionId=${SCANNER_SESSION_ID}`; // رابط صفحة الماسح مع معرف الجلسة
+            showNotification(`
+                يرجى فتح الماسح على الهاتف (الجهاز الآخر) باستخدام هذا الرابط:
+                <br>
+                <a href="${scannerLink}" target="_blank" style="color: yellow; text-decoration: underline;">${scannerLink}</a>
+                <br>
+                ثم قم بالمسح.
+            `, "info", 10000);
+            console.log("Scanner URL for other device:", scannerLink);
+        });
+        // ***** نهاية منطق فتح مودال اختيار مصدر المسح *****
 
         // الاستماع لنتائج المسح من Firestore
         listenToScannerSession((scannedValue, purpose) => {
@@ -226,7 +342,6 @@
                 console.log("Received barcode from scanner via Firestore:", scannedValue);
             }
         });
-        // ***** نهاية وظيفة طلب المسح والاستماع لـ Firestore *****
 
         function updateNavigationPermissions() {
             if (!canAccessSalesHistory()) {
