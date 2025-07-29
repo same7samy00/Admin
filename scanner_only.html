@@ -19,12 +19,12 @@
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            overflow: hidden;
+            overflow: hidden; /* لمنع ظهور أشرطة التمرير */
         }
         #reader {
             width: 90vw;
             max-width: 400px;
-            aspect-ratio: 1/1;
+            aspect-ratio: 1/1; /* للحفاظ على نسبة العرض إلى الارتفاع */
             border: 5px solid rgba(255, 255, 255, 0.2);
             border-radius: 24px;
             overflow: hidden;
@@ -33,16 +33,16 @@
         .status-message {
             font-size: 1.2em;
             font-weight: 600;
-            color: #4CAF50;
+            color: #4CAF50; /* أخضر للإشارة للجاهزية */
         }
         .scanned-value {
             margin-top: 15px;
             font-size: 1.1em;
-            color: #03A9F4;
-            word-break: break-all;
+            color: #03A9F4; /* أزرق للقيمة الممسوحة */
+            word-break: break-all; /* لضمان عرض الباركود الطويل */
         }
         .error-message {
-            color: #FF5252;
+            color: #FF5252; /* أحمر للخطأ */
             margin-top: 15px;
         }
     </style>
@@ -55,6 +55,7 @@
     <p class="error-message" id="errorMessage"></p>
 
     <script type="module">
+        // Firebase Imports (مستقلة عن shared.js)
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js";
         import { getFirestore, doc, updateDoc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
 
@@ -72,6 +73,7 @@
         // Shared Scanner Session ID - MUST MATCH IN shared.js
         const SHARED_SCANNER_SESSION_ID = "YOUR_STORE_UNIQUE_SCANNER_ID_12345"; 
         
+        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const scannerSessionDocRef = doc(db, 'scannerSessions', SHARED_SCANNER_SESSION_ID);
@@ -94,9 +96,8 @@
         }
 
         async function onScanSuccess(decodedText, decodedResult) {
-            // تجاهل الكود إذا كان نفس الكود الذي تم مسحه مؤخرًا (لمنع التكرار السريع جداً)
+            // تجاهل الكود إذا كان نفس الكود الذي تم مسحه مؤخرًا (لمنع التكرار السريع)
             if (decodedText === lastScannedUniqueValue) {
-                console.log("Ignoring duplicate scan:", decodedText);
                 return;
             }
             lastScannedUniqueValue = decodedText; // تحديث آخر كود تم مسحه
@@ -125,7 +126,7 @@
 
             // بعد تأخير قصير، أعد تشغيل الماسح ليكون جاهزًا للعنصر التالي
             setTimeout(() => {
-                // لا نعيد تعيين lastScannedUniqueValue هنا مباشرة، بل نتركه حتى يتم تأكيد المعالجة من الصفحة الرئيسية
+                lastScannedUniqueValue = null; // إعادة تعيين لتمكين مسح نفس الكود لاحقاً
                 startScanner(); // أعد تشغيل الماسح الضوئي للمسح المستمر
             }, 1000); // انتظر 1 ثانية قبل إعادة التشغيل
         }
@@ -153,8 +154,8 @@
             }
             try {
                 await html5QrCode.start(
-                    { facingMode: "environment" },
-                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    { facingMode: "environment" }, // يفضل الكاميرا الخلفية
+                    { fps: 10, qrbox: { width: 250, height: 250 } }, // إعدادات المسح
                     onScanSuccess,
                     onScanFailure
                 );
@@ -162,6 +163,8 @@
                 updateUI('الماسح جاهز وفي انتظار الكود...');
                 console.log("Scanner started successfully.");
 
+                // تعيين الحالة الأولية في Firestore للإشارة إلى الجاهزية
+                // يستخدم setDoc هنا في حال عدم وجود المستند، أو updateDoc إذا كان موجودًا
                 await setDoc(scannerSessionDocRef, { status: 'phoneReady', lastSeen: new Date() }, { merge: true });
 
             } catch (err) {
@@ -173,30 +176,25 @@
         // ابدأ الماسح عند تحميل الصفحة
         document.addEventListener('DOMContentLoaded', startScanner);
 
-        // الاستماع لتغييرات الغرض والحالة من الصفحات الرئيسية
+        // الاستماع لتغييرات الغرض من الصفحات الرئيسية
         onSnapshot(scannerSessionDocRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                if (data.purpose && data.purpose !== currentPurpose) { // تحديث الغرض فقط إذا كان مختلفاً
+                if (data.purpose) {
                     currentPurpose = data.purpose;
                     console.log("Received new purpose from main app:", currentPurpose);
                     // يمكنك تحديث واجهة المستخدم في الماسح هنا لإظهار الغرض الحالي
                     // مثال: updateUI(`جاهز للمسح لـ: ${currentPurpose}`, lastScannedValue.textContent);
                 }
                 // إذا كانت الحالة readyForNextScan، فهذا يعني أن الصفحة الرئيسية قد استلمت الكود
-                // ويمكننا إعادة تعيين lastScannedUniqueValue هنا للسماح بمسح نفس الكود مرة أخرى
+                // ويمكننا إعادة تعيين lastScannedUniqueValue هنا للسماح بمسح نفس الكود مرة أخرى إذا لزم الأمر
                 if (data.status === 'readyForNextScan') {
-                    console.log("Main app confirmed processing. Resetting lastScannedUniqueValue.");
                     lastScannedUniqueValue = null; 
-                    // إذا كان الماسح لا يعمل، أعد تشغيله
-                    if (!isScanning) {
-                         startScanner();
-                    }
-                    updateUI('الماسح جاهز وفي انتظار الكود...'); 
+                    updateUI('الماسح جاهز وفي انتظار الكود...'); // إعادة رسالة الحالة للجاهزية
                 }
             }
         }, (error) => {
-            console.error("Error listening to scanner session for purpose/status:", error);
+            console.error("Error listening to scanner session for purpose:", error);
         });
 
         // اختياري: الاستماع لرؤية الصفحة لإيقاف/استئناف الماسح (مفيد لتطبيقات PWA)
