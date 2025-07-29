@@ -72,9 +72,11 @@
     </div>
 
     <script type="module">
+        // Import Firebase SDKs directly
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
         import { getFirestore, doc, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
+        // Your web app's Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyC5ls-rPdJ65x5BoMGwAOpdcPtD585C2ys",
             authDomain: "pharmacy-inventory-bf04a.firebaseapp.com",
@@ -84,60 +86,91 @@
             appId: "1:937788650384:web:6451225d00e648f3a0b915",
             measurementId: "G-ZGC9EQ55SL"
         };
-        const SHARED_SCANNER_SESSION_ID = "YOUR_STORE_UNIQUE_SCANNER_ID_12345"; // تأكد من أن هذا المعرف مطابق في الصفحات الأخرى
+        // Define a unique ID for this scanner session. Ensure this is consistent across pages.
+        const SHARED_SCANNER_SESSION_ID = "YOUR_STORE_UNIQUE_SCANNER_ID_12345"; 
         
+        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const scannerSessionDocRef = doc(db, 'scannerSessions', SHARED_SCANNER_SESSION_ID);
         
+        // Get UI elements
         const statusContainer = document.getElementById('statusContainer');
         const statusIcon = document.getElementById('statusIcon');
         const statusMessage = document.getElementById('statusMessage');
         const readerDiv = document.getElementById('reader');
         
-        let html5QrCode;
+        let html5QrCode; // Variable to hold the Html5Qrcode instance
 
+        /**
+         * Updates the UI to reflect the scanner's status.
+         * @param {string} status - The status type (e.g., 'ready', 'scanning', 'error', 'success').
+         * @param {string} message - The message to display to the user.
+         * @param {string} iconClass - The Remixicon class for the status icon.
+         */
         function updateStatusUI(status, message, iconClass) {
             statusContainer.className = `status-container status-${status}`;
             statusIcon.className = `status-icon ${iconClass}`;
             statusMessage.textContent = message;
         }
 
+        /**
+         * Callback function when a QR/barcode is successfully scanned.
+         * Stops the scanner and updates Firestore with the scanned value.
+         * @param {string} decodedText - The decoded text from the QR/barcode.
+         * @param {Object} decodedResult - The full decoded result object.
+         */
         function onScanSuccess(decodedText, decodedResult) {
             html5QrCode.stop().then(async () => {
-                readerDiv.style.display = 'none';
-                updateStatusUI('success', `تم المسح بنجاح!`, 'ri-check-line');
+                readerDiv.style.display = 'none'; // Hide reader once scanned
+                updateStatusUI('success', `تم المسح بنجاح!`, 'ri-check-line'); // Update UI status
+                // Update the Firestore document with the scanned value and status
                 await updateDoc(scannerSessionDocRef, {
                     status: 'scanned',
                     scannedValue: decodedText,
-                    scannedAt: new Date()
+                    scannedAt: new Date() // Timestamp of when it was scanned
                 });
             }).catch(err => {
                 console.error("Failed to stop scanner", err);
             });
         }
         
-        function onScanFailure(error) { /* Ignore */ }
+        /**
+         * Callback function for scanner failures (e.g., no QR code found).
+         * We generally ignore these for continuous scanning.
+         * @param {string} error - The error message.
+         */
+        function onScanFailure(error) { 
+            /* Ignore - This function is called frequently when no QR code is in view. 
+               Only log if it's a critical error preventing scan initiation. */ 
+        }
 
+        /**
+         * Initializes and starts the QR code scanner.
+         */
         async function startScanner() {
-            readerDiv.style.display = 'block';
+            readerDiv.style.display = 'block'; // Show the reader div
             if (!html5QrCode) {
-                html5QrCode = new Html5Qrcode("reader");
+                html5QrCode = new Html5Qrcode("reader"); // Create a new Html5Qrcode instance if it doesn't exist
             }
             try {
+                // Start the scanner with environment camera, specific FPS, and QR box size
                 await html5QrCode.start(
-                    { facingMode: "environment" },
-                    { fps: 10, qrbox: { width: 250, height: 250 } },
-                    onScanSuccess,
-                    onScanFailure
+                    { facingMode: "environment" }, // Prefer rear camera
+                    { fps: 10, qrbox: { width: 250, height: 250 } }, // Scan settings
+                    onScanSuccess, // Callback for successful scan
+                    onScanFailure // Callback for scan failure
                 );
+                updateStatusUI('scanning', `جاري المسح...`, 'ri-qr-scan-2-line animate-pulse');
             } catch (err) {
                  updateStatusUI('error', 'لا يمكن تشغيل الكاميرا', 'ri-error-warning-line');
-                 console.error("Failed to start scanner", err);
+                 console.error("Failed to start scanner:", err);
             }
         }
         
+        // Listen to changes in the scanner session document in Firestore
         onSnapshot(scannerSessionDocRef, async (snapshot) => {
+            // If the document doesn't exist, create it with a 'phoneReady' status
             if (!snapshot.exists()) {
                 await setDoc(scannerSessionDocRef, { status: 'phoneReady', lastSeen: new Date() });
                 updateStatusUI('ready', 'الماسح جاهز وفي انتظار الطلب', 'ri-check-double-line');
@@ -145,33 +178,43 @@
             }
             
             const data = snapshot.data();
+            console.log("Scanner session update:", data); // For debugging
+            
+            // Handle different statuses received from the main application
             switch(data.status) {
                 case 'scanRequested':
+                    // When a scan is requested by the main app
                     const purposeText = data.purpose === 'search' ? 'للبحث' : 'لإضافة منتج';
                     updateStatusUI('scanning', `جاري المسح ${purposeText}...`, 'ri-qr-scan-2-line animate-pulse');
+                    // Immediately update status to 'scanning' to prevent re-triggering this branch
                     await updateDoc(scannerSessionDocRef, { status: 'scanning' });
-                    startScanner();
+                    startScanner(); // Start the camera
                     break;
                 case 'readyForNextScan':
                 case 'phoneReady':
-                    readerDiv.style.display = 'none';
+                    // When the main app has processed the previous scan or is just waiting
+                    readerDiv.style.display = 'none'; // Hide reader
                     updateStatusUI('ready', 'الماسح جاهز وفي انتظار الطلب', 'ri-check-double-line');
+                    // If scanner is running, stop it
                     if(html5QrCode && html5QrCode.isScanning) {
-                        html5QrCode.stop();
+                        html5QrCode.stop().catch(err => console.error("Error stopping scanner:", err));
                     }
                     break;
                 case 'scanning':
-                    // Already scanning, do nothing.
+                    // If status is already scanning, do nothing (prevents re-starting scanner unnecessarily)
                     break;
                 case 'scanned':
-                    // Desktop will reset status, just wait.
+                    // If the main app has already received the scanned value, just show success message
                     updateStatusUI('success', 'تم إرسال الكود بنجاح!', 'ri-check-line');
+                    // The main app is responsible for resetting the status to 'readyForNextScan'
                     break;
                 default:
-                     readerDiv.style.display = 'none';
-                     updateStatusUI('ready', 'في انتظار طلبات المسح...', 'ri-time-line');
+                    // Default state or unknown status
+                    readerDiv.style.display = 'none';
+                    updateStatusUI('ready', 'في انتظار طلبات المسح...', 'ri-time-line');
             }
         }, (error) => {
+            // Handle Firestore listener errors
             console.error("Firestore listener error:", error);
             updateStatusUI('error', 'فشل الاتصال بالنظام', 'ri-signal-wifi-error-line');
         });
