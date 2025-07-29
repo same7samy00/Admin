@@ -103,8 +103,8 @@
         let html5QrCode;
         let isScanning = false; 
         let currentPurpose = null; 
+        let lastHandledScanTimestamp = 0; 
 
-        // وظيفة تحديث الواجهة
         function updateUI(message, value = '', error = '') {
             statusMessage.textContent = message;
             lastScannedValue.textContent = value ? `آخر كود: ${value}` : '';
@@ -114,9 +114,15 @@
         }
 
         async function onScanSuccess(decodedText, decodedResult) {
+            const currentTimestamp = Date.now();
+            if (currentTimestamp - lastHandledScanTimestamp < 1000) { // زيادة الفاصل الزمني قليلاً
+                console.warn("Scanner: Ignoring rapid duplicate scan attempt.");
+                return;
+            }
+            lastHandledScanTimestamp = currentTimestamp;
+
             updateUI('تم المسح بنجاح!', decodedText);
             
-            // إرسال الكود الممسوح والغرض إلى Firestore
             try {
                 await updateDoc(scannerSessionDocRef, { 
                     status: "scanned", 
@@ -129,6 +135,9 @@
                 console.error("Scanner: Error updating scanned value in Firestore:", e);
                 updateUI('خطأ في إرسال الكود!', '', 'فشل إرسال الكود لـ Firestore.');
             }
+            // بعد المسح الناجح والإرسال، أوقف الكاميرا فوراً لتجنب التكرار
+            stopScanner(); 
+            updateUI('تم المسح، الماسح متوقف.', decodedText);
         }
         
         function onScanFailure(error) { 
@@ -139,7 +148,6 @@
             }
         }
 
-        // وظيفة بدء الماسح
         async function startScanner() {
             if (isScanning) {
                 console.log("Scanner: already running, not restarting.");
@@ -161,7 +169,6 @@
                 isScanning = true;
                 updateUI('الماسح جاهز وفي انتظار الكود...');
                 console.log("Scanner: started successfully.");
-                // تحديث حالة الماسح الضوئي في Firestore عند بدء تشغيله بنجاح
                 await updateDoc(scannerSessionDocRef, { status: "phoneReady" }).catch(e => console.error("Scanner: Error updating status to phoneReady:", e));
             } catch (err) {
                  updateUI('لا يمكن تشغيل الكاميرا', '', 'تأكد من إعطاء إذن الكاميرا وعدم استخدامها من قبل تطبيق آخر.');
@@ -171,7 +178,6 @@
             }
         }
 
-        // وظيفة إيقاف الماسح
         async function stopScanner() {
             if (html5QrCode && isScanning) {
                 try {
@@ -188,17 +194,15 @@
         };
         
         document.addEventListener('DOMContentLoaded', () => {
-            // الاستماع لحالة الجلسة من Firestore (لتلقي طلبات البدء/الإيقاف)
             onSnapshot(scannerSessionDocRef, (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     console.log("Scanner: Received session update from Firestore:", data);
                     
                     if (data.status === "requested" && !isScanning) {
-                        currentPurpose = data.purpose; // حفظ الغرض للطلب الحالي
-                        startScanner();
+                        currentPurpose = data.purpose; 
+                        startScanner(); 
                     } else if (data.status === "processed" && isScanning) {
-                        // إذا تم معالجة الكود من قبل الصفحة الرئيسية، أوقف الماسح
                         stopScanner();
                         updateUI('الماسح في وضع الخمول. ينتظر طلب مسح جديد.');
                     } else if (data.status === "idle" && isScanning) { 
@@ -217,13 +221,11 @@
 
         stopScannerBtn.addEventListener('click', () => {
             stopScanner();
-            // تحديث حالة Firestore لإبلاغ الصفحة الرئيسية بأن الماسح توقف يدوياً
             if (scannerSessionDocRef) {
                 updateDoc(scannerSessionDocRef, { status: "idle", purpose: null, scannedValue: null }).catch(e => console.error("Scanner: Error updating scanner session status on manual stop:", e));
             }
         });
 
-        // عند إغلاق النافذة، تأكد من إيقاف الكاميرا
         window.addEventListener('beforeunload', () => {
             if (html5QrCode && isScanning) {
                 html5QrCode.stop().catch(err => console.error("Scanner: Error stopping scanner on unload:", err));
