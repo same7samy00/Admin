@@ -66,7 +66,7 @@
                     <label for="productBarcode">كود المنتج (Barcode/QR)</label>
                     <div class="input-with-button">
                         <input type="text" id="productBarcode" placeholder="أدخل الكود أو امسحه">
-                        <button type="button" class="btn btn-icon btn-secondary" id="requestScanForBarcodeBtn" title="مسح QR بالهاتف"><i class="ri-qr-code-line"></i></button>
+                        <button type="button" class="btn btn-icon btn-secondary" id="requestScanForBarcodeBtn" title="مسح QR"><i class="ri-qr-code-line"></i></button>
                     </div>
                      <span class="error-message" id="productBarcodeError"></span>
                 </div>
@@ -86,8 +86,8 @@
             canAddProducts, 
             canEditProducts, 
             loadSettings,
-            requestScan, // تم استيرادها
-            listenToScannerSession // تم استيرادها
+            requestScan, 
+            listenToScannerSession 
         } from './shared.js'; 
 
         import { collection, addDoc, doc, updateDoc, getDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
@@ -96,7 +96,7 @@
         const saveBtn = document.getElementById('saveProductBtn');
         const urlParams = new URLSearchParams(window.location.search);
         const editingProductId = urlParams.get('id');
-        const requestScanForBarcodeBtn = document.getElementById('requestScanForBarcodeBtn'); // الزر الجديد
+        const requestScanForBarcodeBtn = document.getElementById('requestScanForBarcodeBtn');
 
         const fields = {
             name: { input: document.getElementById('productName'), error: document.getElementById('productNameError') },
@@ -139,6 +139,7 @@
             checkInitialPermissionsAndRedirect();
             updateSaveButtonPermissions();
             loadProductForEdit();
+            listenToScannerSession(() => {}); // ابدأ الاستماع لجلسة الماسح الضوئي عند تحميل الصفحة
         });
 
         function validateForm() {
@@ -277,6 +278,8 @@
         // ***** وظيفة طلب المسح والاستماع لـ Firestore *****
         requestScanForBarcodeBtn.addEventListener('click', () => {
             requestScan('add_new'); // طلب المسح لغرض إضافة منتج جديد
+            // فتح نافذة الماسح هنا (سواء على نفس الجهاز أو كتذكير لفتحها على الهاتف)
+            window.open('scanner_only.html', '_blank', 'width=450,height=550,toolbar=no,location=no,status=no,menubar=no,scrollbars=no,resizable=yes');
         });
 
         // الاستماع لنتائج المسح من Firestore
