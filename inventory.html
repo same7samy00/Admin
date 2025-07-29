@@ -8,7 +8,7 @@
     <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <style>
-        /* Notification styles (copied from shared.js context) */
+        /* Notification styles (copied from shared.js context or main style.css if global) */
         #notification-container {
             position: fixed;
             top: 20px;
@@ -44,7 +44,7 @@
         .notification.warning { background-color: #ff9800; }
         .notification i { font-size: 1.2em; }
 
-        /* Confirmation modal styles (copied from shared.js context) */
+        /* Confirmation modal styles (copied from shared.js context or main style.css if global) */
         .confirmation-modal-overlay {
             position: fixed;
             top: 0;
@@ -171,158 +171,22 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
-        import { getFirestore, collection, getDocs, doc, deleteDoc, query, orderBy, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+        // استيراد الوظائف المشتركة من shared.js
+        import { 
+            db, 
+            showNotification, 
+            showConfirmation, 
+            listenToScannerSession, 
+            requestScan, 
+            canAddProducts, 
+            canEditProducts, 
+            canDeleteProducts, 
+            loadSettings, 
+            canAccessSalesHistory, 
+            canAccessSettings 
+        } from './shared.js'; // تأكد من المسار الصحيح لـ shared.js
 
-        // Firebase Configuration (from original script block)
-        const firebaseConfig = {
-            apiKey: "AIzaSyBfgOusQjs1qj6G_92_Ecu2wjxASeO2Tko",
-            authDomain: "project-2965375871585611133.firebaseapp.com",
-            projectId: "project-2965375871585611133",
-            storageBucket: "project-2965375871585611133.firebasestorage.app",
-            messagingSenderId: "195369497927",
-            appId: "1:195369497927:web:451c349c098f2a59c18862",
-            measurementId: "G-YN2HRECRL0"
-        };
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const SHARED_SCANNER_SESSION_ID = "YOUR_STORE_UNIQUE_SCANNER_ID_12345"; // Same ID as in qr_scanner.html
-        const scannerSessionDocRef = doc(db, 'scannerSessions', SHARED_SCANNER_SESSION_ID);
-
-        // Global settings for permissions (initially default, updated by Firestore)
-        let currentSettings = {
-            canAddProducts: true,
-            canEditProducts: true,
-            canDeleteProducts: true,
-            canAccessSalesHistory: true,
-            canAccessSettings: true
-        };
-
-        // Function to show notifications (copied from shared.js)
-        function showNotification(message, type = 'info', duration = 3000) {
-            const container = document.getElementById('notification-container');
-            if (!container) return;
-
-            const notification = document.createElement('div');
-            notification.className = `notification ${type}`;
-            let iconClass = '';
-            if (type === 'success') iconClass = 'ri-check-line';
-            else if (type === 'error') iconClass = 'ri-error-warning-line';
-            else if (type === 'warning') iconClass = 'ri-alert-line';
-            else iconClass = 'ri-information-line';
-
-            notification.innerHTML = `<i class="${iconClass}"></i><span>${message}</span>`;
-
-            container.appendChild(notification);
-
-            setTimeout(() => {
-                notification.classList.add('show');
-            }, 10);
-
-            setTimeout(() => {
-                notification.classList.remove('show');
-                notification.addEventListener('transitionend', () => notification.remove());
-            }, duration);
-        }
-
-        // Function to show confirmation (copied from shared.js)
-        function showConfirmation(message, onConfirm) {
-            const overlay = document.getElementById('confirmationModalOverlay');
-            const messageEl = document.getElementById('confirmationMessage');
-            const confirmBtn = document.getElementById('confirmBtn');
-            const cancelBtn = document.getElementById('cancelConfirmBtn');
-
-            messageEl.textContent = message;
-            overlay.classList.add('show');
-
-            const handleConfirm = () => {
-                onConfirm();
-                overlay.classList.remove('show');
-                confirmBtn.removeEventListener('click', handleConfirm);
-                cancelBtn.removeEventListener('click', handleCancel);
-            };
-
-            const handleCancel = () => {
-                overlay.classList.remove('show');
-                confirmBtn.removeEventListener('click', handleConfirm);
-                cancelBtn.removeEventListener('click', handleCancel);
-            };
-
-            confirmBtn.addEventListener('click', handleConfirm);
-            cancelBtn.addEventListener('click', handleCancel);
-        }
-
-        // Permission Checkers (copied from shared.js)
-        function canAddProducts() { return currentSettings.canAddProducts; }
-        function canEditProducts() { return currentSettings.canEditProducts; }
-        function canDeleteProducts() { return currentSettings.canDeleteProducts; }
-        function canAccessSalesHistory() { return currentSettings.canAccessSalesHistory; }
-        function canAccessSettings() { return currentSettings.canAccessSettings; }
-
-        // Load settings from Firestore (copied and adapted from shared.js)
-        function loadSettings() {
-            const settingsDocRef = doc(db, 'settings', 'userPermissions');
-            onSnapshot(settingsDocRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    currentSettings = { ...currentSettings, ...docSnap.data() };
-                    console.log("Settings updated:", currentSettings);
-                    // Re-render products to update action buttons based on new permissions
-                    renderProducts(); 
-                    updateNavigationPermissions(); // Update sidebar links
-                } else {
-                    console.warn("No user permissions settings found. Using default.");
-                    // If no settings document, maybe create one with defaults
-                    setDoc(settingsDocRef, currentSettings, { merge: true });
-                }
-            }, (error) => {
-                console.error("Error listening to settings:", error);
-                showNotification("خطأ في تحميل الإعدادات.", "error");
-            });
-        }
-
-        // Scanner session logic (copied and adapted from shared.js)
-        let scannerSessionListenerUnsubscribe = null;
-
-        function listenToScannerSession(callback) {
-            if (scannerSessionListenerUnsubscribe) {
-                scannerSessionListenerUnsubscribe(); // Unsubscribe from previous listener
-            }
-            scannerSessionListenerUnsubscribe = onSnapshot(scannerSessionDocRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    if (data.status === 'scanned' && data.scannedValue) {
-                        callback(data.scannedValue, data.purpose);
-                        // Reset status after processing to allow next scan
-                        updateDoc(scannerSessionDocRef, {
-                            status: 'readyForNextScan',
-                            scannedValue: null,
-                            purpose: null
-                        }).catch(e => console.error("Error resetting scanner status:", e));
-                    }
-                }
-            }, (error) => {
-                console.error("Error listening to scanner session:", error);
-                showNotification("خطأ في الاتصال بالماسح الضوئي.", "error");
-            });
-        }
-
-        async function requestScan(purpose) {
-            try {
-                await setDoc(scannerSessionDocRef, {
-                    status: 'scanRequested',
-                    purpose: purpose,
-                    requestedAt: new Date()
-                }, { merge: true });
-                showNotification("تم إرسال طلب المسح الضوئي إلى جهاز QR.", "info");
-                // Optionally, open qr_scanner.html in a new tab if it's not already open
-                // window.open('qr_scanner.html', '_blank'); 
-            } catch (e) {
-                console.error("Error requesting scan:", e);
-                showNotification("فشل إرسال طلب المسح الضوئي.", "error");
-            }
-        }
+        import { collection, getDocs, doc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
         const productsTableBody = document.getElementById('productsTableBody');
         const searchInput = document.getElementById('searchProduct');
@@ -353,7 +217,7 @@
             if (filteredProducts === null) {
                 const searchQuery = searchInput.value.toLowerCase().trim();
                 const categoryFilter = categorySelect.value;
-
+                
                 filteredProducts = allProducts;
 
                 if (categoryFilter) {
@@ -382,7 +246,7 @@
                 else if (status === 'نفد المخزون') statusClass = 'status-danger';
                 else statusClass = 'status-success';
 
-                // Check permissions for buttons dynamically
+                // تحديث حالة الأزرار بناءً على الأذونات من shared.js
                 const canEdit = canEditProducts();
                 const canDelete = canDeleteProducts();
 
@@ -399,16 +263,17 @@
                     </td>
                 `;
             });
+            // تحديث زر "إضافة منتج" بناءً على الأذونات
             addProductBtn.style.display = canAddProducts() ? '' : 'none';
         }
-
+        
         productsTableBody.addEventListener('click', (e) => {
             const editBtn = e.target.closest('.edit-btn');
             if (editBtn && !editBtn.disabled) {
                 window.location.href = `add_product.html?id=${editBtn.dataset.id}`;
                 return;
             }
-
+            
             const deleteBtn = e.target.closest('.delete-btn');
             if (deleteBtn && !deleteBtn.disabled) {
                 const productId = deleteBtn.dataset.id;
@@ -417,7 +282,7 @@
                         await deleteDoc(doc(db, "products", productId));
                         showNotification('تم حذف المنتج بنجاح!', 'success');
                         allProducts = allProducts.filter(p => p.id !== productId);
-                        renderProducts();
+                        renderProducts(); // إعادة عرض المنتجات بعد الحذف
                     } catch (err) {
                         console.error("Error deleting document: ", err);
                         showNotification('فشل حذف المنتج.', 'error');
@@ -430,15 +295,16 @@
 
         searchInput.addEventListener('input', () => renderProducts());
         categorySelect.addEventListener('change', () => renderProducts());
-
+        
         document.getElementById('requestScanForSearchBtn').addEventListener('click', () => {
             requestScan('search');
         });
-
+        
+        // الاستماع لجلسة الماسح الضوئي لمعالجة القيم الممسوحة للبحث
         listenToScannerSession((scannedValue, purpose) => {
             if (purpose === 'search' && scannedValue) {
                 searchInput.value = scannedValue;
-                renderProducts();
+                renderProducts(); // إعادة عرض المنتجات بناءً على القيمة الممسوحة
                 showNotification(`تم البحث عن: ${scannedValue}`, 'success');
             }
         });
@@ -456,10 +322,19 @@
             }
         }
 
-        // Initial load sequence
-        loadSettings(); // Start listening to settings updates
-        fetchProducts(); // Fetch products immediately
-        updateNavigationPermissions(); // Update navigation links initially
+        // عند تحميل الصفحة
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSettings(); // ابدأ الاستماع لتحديثات الإعدادات
+            fetchProducts(); // جلب المنتجات
+            updateNavigationPermissions(); // تحديث روابط التنقل بناءً على الإعدادات الأولية
+        });
+
+        // قد تحتاج إلى إضافة معالج زر تسجيل الخروج
+        document.getElementById('logoutButton').addEventListener('click', () => {
+            // تنفيذ منطق تسجيل الخروج هنا
+            showNotification('تم تسجيل الخروج بنجاح!', 'success');
+            // setTimeout(() => window.location.href = 'login.html', 1500); // مثال: إعادة توجيه لصفحة تسجيل الدخول
+        });
     </script>
 </body>
 </html>
