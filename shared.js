@@ -23,7 +23,7 @@ const analytics = getAnalytics(app);
 // *** متغيرات خاصة بجلسة الماسح الضوئي (مهمة جداً) ***
 const SCANNER_SESSION_ID = "myScannerSession123"; 
 const scannerSessionDocRef = doc(db, "scannerSessions", SCANNER_SESSION_ID);
-let lastProcessedScannedValue = null; // لتجنب معالجة نفس القيمة مرتين
+let lastProcessedScannedValue = null; 
 
 // الإعدادات الافتراضية للأذونات
 let currentSettings = {
@@ -31,7 +31,12 @@ let currentSettings = {
     canEditProducts: true,
     canDeleteProducts: true,
     canAccessSalesHistory: true,
-    canAccessSettings: true
+    canAccessSettings: true,
+    storeName: "شيخ العرب",
+    invoiceAddress: "عنوان المتجر",
+    invoicePhone: "رقم الهاتف",
+    invoiceThankYou: "شكراً لتسوقكم من شيخ العرب!",
+    salesHistoryPassword: "admin" // كلمة مرور افتراضية لسجل المبيعات
 };
 
 // تحميل الإعدادات من Firestore
@@ -52,6 +57,28 @@ function loadSettings() {
         showNotification("خطأ في تحميل الإعدادات.", "error");
     });
 }
+
+// *** وظيفة جديدة: للحصول على الإعدادات الحالية ***
+// هذه الوظيفة ستكون غير متزامنة لأنها قد تحتاج للانتظار حتى يتم تحميل الإعدادات من Firestore.
+// يمكن استخدام Promise أو ببساطة استخدام الإعدادات التي تم تحميلها بالفعل.
+async function getSettings() {
+    // إذا كانت الإعدادات قد تم تحميلها بالفعل (currentSettings ليست الافتراضية الأولية)، أعدها مباشرة
+    // إذا كنت تريد التأكد من أنها أحدث نسخة من Firestore، يمكنك جلبها هنا مرة أخرى
+    // ولكن نظرًا لوجود onSnapshot، فإن currentSettings يجب أن تكون محدثة
+    return new Promise(resolve => {
+        if (currentSettings && currentSettings.storeName !== "شيخ العرب") { // مؤشر على أنها حملت من Firestore
+            resolve(currentSettings);
+        } else {
+            // انتظر حتى يتم تشغيل حدث 'settingsUpdated' مرة واحدة على الأقل
+            const handleSettingsLoaded = () => {
+                document.removeEventListener('settingsUpdated', handleSettingsLoaded);
+                resolve(currentSettings);
+            };
+            document.addEventListener('settingsUpdated', handleSettingsLoaded);
+        }
+    });
+}
+
 
 // وظيفة عرض الإشعارات
 function showNotification(message, type = 'info', duration = 3000) {
@@ -125,33 +152,26 @@ function canDeleteProducts() { return currentSettings.canDeleteProducts; }
 function canAccessSalesHistory() { return currentSettings.canAccessSalesHistory; }
 function canAccessSettings() { return currentSettings.canAccessSettings; }
 
-// *** وظائف الماسح الضوئي باستخدام Firestore ***
 
-let scannerSessionUnsubscribe = null; // لكي نتمكن من إلغاء الاشتراك من المستمع
+let scannerSessionUnsubscribe = null; 
+let lastProcessedScannedValue = null; 
 
-// وظيفة لطلب المسح (تستخدمها صفحات الكمبيوتر لفتح الماسح ولإرسال الغرض)
 async function requestScan(purpose) {
     try {
-        // تحديث حالة Firestore لـ "requested" لإخبار صفحة الماسح ببدء العمل
         await setDoc(scannerSessionDocRef, { 
             status: "requested", 
             purpose: purpose, 
             timestamp: new Date(),
-            scannedValue: null // مسح القيمة السابقة
+            scannedValue: null 
         });
         console.log("Scan requested for purpose:", purpose);
-        // الاشعارات ستكون منبثقة من المودال نفسه، وليس هنا مباشرة
-        // showNotification(`تم إرسال طلب المسح. افتح صفحة الماسح وقم بالمسح.`, "info", 5000);
-        
     } catch (e) {
         console.error("Error requesting scan:", e);
         showNotification("فشل طلب المسح. تأكد من اتصال Firebase وقواعد الأمان.", "error");
     }
 }
 
-// وظيفة للاستماع إلى جلسة الماسح الضوئي (تستخدمها صفحات الكمبيوتر لاستقبال النتائج)
 function listenToScannerSession(callback) {
-    // إذا كان هناك مستمع موجود بالفعل، قم بإلغاء الاشتراك منه أولاً
     if (scannerSessionUnsubscribe) {
         scannerSessionUnsubscribe();
         console.log("shared.js: Unsubscribed from previous scanner session listener.");
@@ -162,23 +182,19 @@ function listenToScannerSession(callback) {
             const data = docSnap.data();
             console.log("shared.js: Scanner session data received:", data);
             
-            // إذا كانت الحالة "scanned" ولقد تم مسح قيمة جديدة
             if (data.status === "scanned" && data.scannedValue && data.scannedValue !== lastProcessedScannedValue) {
                 lastProcessedScannedValue = data.scannedValue; 
                 callback(data.scannedValue, data.purpose); 
                 
-                // بعد المعالجة، يتم إعادة تعيين الحالة في Firestore لتجنب التكرار
-                // التأخير هنا مهم لضمان أن الصفحة الرئيسية لديها وقت لمعالجة الكود
                 setTimeout(async () => {
                     await updateDoc(scannerSessionDocRef, { status: "processed", scannedValue: null }).catch(e => console.error("Error updating scanner session status:", e));
                     console.log("shared.js: Scanner session status reset to processed in Firestore.");
-                    // يمكن مسح lastProcessedScannedValue هنا أيضاً
                     lastProcessedScannedValue = null; 
-                }, 500); // تأخير نصف ثانية
+                }, 500); 
+
             } else if (data.status === "processed" && lastProcessedScannedValue !== null) {
-                // إذا تلقينا تأكيد المعالجة، يمكننا مسح القيمة المخزنة
                 lastProcessedScannedValue = null;
-                console.log("shared.js: lastProcessedScannedValue reset.");
+                console.log("shared.js: lastProcessedScannedValue reset from 'processed' status.");
             } else if (data.status === "idle" || data.status === "phoneReady") {
                 console.log("Scanner is idle or ready.");
             }
@@ -193,7 +209,6 @@ function listenToScannerSession(callback) {
     });
 }
 
-// وظيفة لتحديث الكود الممسوح (تستخدمها صفحة الماسح الضوئي scanner_only.html)
 async function updateScannedValue(value, purpose) {
     try {
         await updateDoc(scannerSessionDocRef, { 
@@ -205,11 +220,9 @@ async function updateScannedValue(value, purpose) {
         console.log("Scanner updated Firestore with value:", value);
     } catch (e) {
         console.error("Scanner: Error updating scanned value in Firestore:", e);
-        // يمكنك هنا عرض رسالة خطأ للمستخدم على صفحة الماسح
     }
 }
 
-// تصدير الكائنات والوظائف لتكون متاحة للصفحات الأخرى
 export { 
     db, 
     app, 
@@ -217,6 +230,7 @@ export {
     showNotification, 
     showConfirmation, 
     loadSettings,
+    getSettings, // تم تصديرها
     canAddProducts, 
     canEditProducts, 
     canDeleteProducts, 
