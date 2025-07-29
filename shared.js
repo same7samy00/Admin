@@ -1,10 +1,10 @@
 // shared.js
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
-import { getFirestore, doc, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
-import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-analytics.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js"; // Updated SDK version
+import { getFirestore, doc, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js"; // Updated SDK version
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-analytics.js"; // Updated SDK version
 
-// Firebase Configuration (تأكد من مطابقتها لتكوين مشروعك الفعلي)
+// Firebase Configuration - REPLACE WITH YOUR ACTUAL FIREBASE PROJECT CONFIG
 const firebaseConfig = {
     apiKey: "AIzaSyBfgOusQjs1qj6G_92_Ecu2wjxASeO2Tko",
     authDomain: "project-2965375871585611133.firebaseapp.com",
@@ -18,13 +18,13 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const analytics = getAnalytics(app); // إذا كنت تستخدم تحليلات Firebase
+const analytics = getAnalytics(app);
 
-// معرف جلسة الماسح الضوئي المشترك (يجب أن يكون مطابقًا في qr_scanner.html)
+// Shared Scanner Session ID - MUST MATCH IN qr_scanner.html
 const SHARED_SCANNER_SESSION_ID = "YOUR_STORE_UNIQUE_SCANNER_ID_12345";
 const scannerSessionDocRef = doc(db, 'scannerSessions', SHARED_SCANNER_SESSION_ID);
 
-// الإعدادات الافتراضية للأذونات
+// Default permissions (can be overridden by Firestore settings)
 let currentSettings = {
     canAddProducts: true,
     canEditProducts: true,
@@ -33,20 +33,20 @@ let currentSettings = {
     canAccessSettings: true
 };
 
-// تحميل الإعدادات من Firestore
+// Function to load settings from Firestore
 function loadSettings() {
     const settingsDocRef = doc(db, 'settings', 'userPermissions');
-    // استخدم onSnapshot للاستماع للتغييرات في الوقت الفعلي
+    // Listen for real-time updates to settings
     onSnapshot(settingsDocRef, (docSnap) => {
         if (docSnap.exists()) {
             currentSettings = { ...currentSettings, ...docSnap.data() };
             console.log("Settings updated:", currentSettings);
-            // قد تحتاج إلى استدعاء وظيفة هنا لتحديث واجهة المستخدم بعد تحميل الإعدادات
-            // (مثل تحديث أذونات الأزرار أو روابط التنقل)
+            // Trigger a custom event to notify components that settings have updated
+            const event = new CustomEvent('settingsUpdated');
+            document.dispatchEvent(event);
         } else {
             console.warn("No user permissions settings found. Using default and creating a default doc.");
-            // إذا لم يكن المستند موجودًا، قم بإنشائه بالإعدادات الافتراضية
-            setDoc(settingsDocRef, currentSettings, { merge: true });
+            setDoc(settingsDocRef, currentSettings, { merge: true }).catch(e => console.error("Error creating default settings:", e));
         }
     }, (error) => {
         console.error("Error listening to settings:", error);
@@ -54,10 +54,13 @@ function loadSettings() {
     });
 }
 
-// وظيفة عرض الإشعارات
+// Function to display notifications
 function showNotification(message, type = 'info', duration = 3000) {
     const container = document.getElementById('notification-container');
-    if (!container) return;
+    if (!container) {
+        console.warn("Notification container not found. Notification will not be displayed.");
+        return;
+    }
 
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
@@ -81,7 +84,7 @@ function showNotification(message, type = 'info', duration = 3000) {
     }, duration);
 }
 
-// وظيفة عرض نافذة التأكيد
+// Function to display a confirmation modal
 function showConfirmation(message, onConfirm) {
     const overlay = document.getElementById('confirmationModalOverlay');
     const messageEl = document.getElementById('confirmationMessage');
@@ -89,7 +92,11 @@ function showConfirmation(message, onConfirm) {
     const cancelBtn = document.getElementById('cancelConfirmBtn');
 
     if (!overlay || !messageEl || !confirmBtn || !cancelBtn) {
-        console.error("Confirmation modal elements not found.");
+        console.error("Confirmation modal elements not found. Cannot show confirmation.");
+        // Fallback to simple confirm if elements are missing
+        if (confirm(message)) {
+            onConfirm();
+        }
         return;
     }
 
@@ -114,7 +121,7 @@ function showConfirmation(message, onConfirm) {
 }
 
 
-// وظائف التحقق من الأذونات
+// Permission checker functions
 function canAddProducts() { return currentSettings.canAddProducts; }
 function canEditProducts() { return currentSettings.canEditProducts; }
 function canDeleteProducts() { return currentSettings.canDeleteProducts; }
@@ -122,30 +129,27 @@ function canAccessSalesHistory() { return currentSettings.canAccessSalesHistory;
 function canAccessSettings() { return currentSettings.canAccessSettings; }
 
 
-// منطق جلسة الماسح الضوئي (مخصص للتواصل مع qr_scanner.html)
+// Scanner session logic for interaction with qr_scanner.html
 let scannerSessionListenerUnsubscribe = null;
 
 /**
- * يستمع إلى تغييرات جلسة الماسح الضوئي ويستدعي دالة رد الاتصال عند مسح قيمة.
- * @param {function(string, string)} callback - دالة يتم استدعاؤها عند مسح قيمة، تستقبل (scannedValue, purpose).
+ * Listens to scanner session changes and calls a callback when a value is scanned.
+ * @param {function(string, string)} callback - Function to call on scanned value, receives (scannedValue, purpose).
  */
 function listenToScannerSession(callback) {
-    // إلغاء الاشتراك من المستمع السابق إذا كان موجودًا لتجنب الاستماع المزدوج
     if (scannerSessionListenerUnsubscribe) {
-        scannerSessionListenerUnsubscribe();
+        scannerSessionListenerUnsubscribe(); // Unsubscribe from previous listener
     }
     scannerSessionListenerUnsubscribe = onSnapshot(scannerSessionDocRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            // تحقق مما إذا كانت الحالة "scanned" ولقد تم مسح قيمة
             if (data.status === 'scanned' && data.scannedValue) {
                 callback(data.scannedValue, data.purpose);
-                // إعادة تعيين الحالة بعد المعالجة للسماح بالمسح التالي
+                // Reset status after processing to allow next scan
                 updateDoc(scannerSessionDocRef, {
                     status: 'readyForNextScan',
                     scannedValue: null,
                     purpose: null
-                    // لا تقم بإزالة requestedAt، فقط قيمته يمكن أن تتغير
                 }).catch(e => console.error("Error resetting scanner status:", e));
             }
         }
@@ -156,31 +160,37 @@ function listenToScannerSession(callback) {
 }
 
 /**
- * يرسل طلبًا إلى صفحة الماسح الضوئي لبدء المسح.
- * @param {string} purpose - الغرض من المسح (مثل 'search' أو 'add_new').
+ * Sends a request to the scanner page to start scanning.
+ * @param {string} purpose - The purpose of the scan (e.g., 'search', 'add_new').
  */
 async function requestScan(purpose) {
     try {
-        await setDoc(scannerSessionDocRef, {
-            status: 'scanRequested',
-            purpose: purpose,
-            requestedAt: new Date() // لتسجيل وقت الطلب
-        }, { merge: true }); // استخدم merge: true لتحديث فقط الحقول المحددة
-        showNotification("تم إرسال طلب المسح الضوئي إلى جهاز QR.", "info");
-        // اختياري: إذا كان الماسح الضوئي غير مفتوح، يمكنك محاولة فتحه في نافذة جديدة
-        // window.open('qr_scanner.html', '_blank');
+        // First, check if the scanner is ready (optional, but good for UX)
+        const docSnap = await getDoc(scannerSessionDocRef);
+        if (docSnap.exists() && (docSnap.data().status === 'phoneReady' || docSnap.data().status === 'readyForNextScan')) {
+            await setDoc(scannerSessionDocRef, {
+                status: 'scanRequested',
+                purpose: purpose,
+                requestedAt: new Date()
+            }, { merge: true });
+            showNotification("تم إرسال طلب المسح الضوئي إلى جهاز QR.", "info");
+            // You might want to open qr_scanner.html in a new tab here if it's not expected to be open.
+            // window.open('qr_scanner.html', '_blank'); 
+        } else {
+            showNotification("الماسح الضوئي غير جاهز أو غير متصل. يرجى فتح صفحة الماسح.", "warning", 5000);
+            console.warn("Scanner not ready. Current status:", docSnap.exists() ? docSnap.data().status : 'Document not found');
+        }
     } catch (e) {
         console.error("Error requesting scan:", e);
         showNotification("فشل إرسال طلب المسح الضوئي.", "error");
     }
 }
 
-
-// تصدير الكائنات والوظائف لتكون متاحة للصفحات الأخرى
+// Export all necessary functions and objects
 export { 
     db, 
     app, 
-    analytics, // إذا كنت تستخدم التحليلات
+    analytics, 
     showNotification, 
     showConfirmation, 
     loadSettings,
