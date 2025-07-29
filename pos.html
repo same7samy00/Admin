@@ -194,7 +194,6 @@
 
     <script type="module">
         import { getFirestore, collection, getDocs, doc, updateDoc, addDoc, writeBatch, getDoc } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
-        // تم تصحيح الاستيراد
         import { db, showNotification, showConfirmation, listenToScannerSession, requestScan, getSettings, loadSettings, canAccessSalesHistory, canAccessSettings, SCANNER_SESSION_ID } from './shared.js'; 
 
         const productSearchInput = document.getElementById('productSearchInput');
