@@ -86,7 +86,7 @@
     </div>
 
     <script type="module">
-        // Import shared functions and Firebase dependencies
+        // استيراد الوظائف المشتركة من shared.js
         import { 
             db, 
             showNotification, 
@@ -101,7 +101,7 @@
             canAccessSettings 
         } from './shared.js'; 
 
-        import { collection, getDocs, doc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js"; // Updated SDK version
+        import { collection, getDocs, doc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
 
         const productsTableBody = document.getElementById('productsTableBody');
         const searchInput = document.getElementById('searchProduct');
@@ -234,21 +234,18 @@
             }
         }
 
-        // Event listener for custom 'settingsUpdated' event from shared.js
         document.addEventListener('settingsUpdated', () => {
-            renderProducts(); // Re-render products to update button states based on new permissions
-            updateNavigationPermissions(); // Update sidebar links
+            renderProducts(); 
+            updateNavigationPermissions(); 
         });
 
         document.addEventListener('DOMContentLoaded', () => {
-            loadSettings(); // Start listening to settings updates
-            fetchProducts(); // Initial fetch of products
+            loadSettings(); 
+            fetchProducts(); 
         });
 
         document.getElementById('logoutButton').addEventListener('click', () => {
-            // Implement logout logic here
             showNotification('تم تسجيل الخروج بنجاح!', 'success');
-            // setTimeout(() => window.location.href = 'login.html', 1500); // Example: redirect to login page
         });
     </script>
 </body>
