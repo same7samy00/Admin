@@ -3,18 +3,9 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ماسح QR - شيخ العرب</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+    <title>ماسح QR دائم - شيخ العرب</title>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
-        :root {
-            --bg-light: #F0F4F8;
-            --text-dark: #2C3E50;
-            --accent-blue: #03A9F4;
-            --success-green: #4CAF50;
-            --error-red: #FF5252;
-        }
         body {
             font-family: 'Cairo', sans-serif;
             background-color: #000;
@@ -22,13 +13,11 @@
             margin: 0;
             padding: 20px;
             text-align: center;
-            direction: rtl;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100vh;
-            box-sizing: border-box;
             overflow: hidden;
         }
         #reader {
@@ -40,44 +29,38 @@
             overflow: hidden;
             margin-bottom: 20px;
         }
-        .status-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 15px;
-            background-color: rgba(0, 0, 0, 0.5);
-            padding: 20px;
-            border-radius: 12px;
-        }
-        .status-icon {
-            font-size: 3em;
-            line-height: 1;
-        }
         .status-message {
             font-size: 1.2em;
             font-weight: 600;
+            color: #4CAF50; /* Green for ready */
         }
-        .status-ready .status-icon { color: var(--success-green); }
-        .status-scanning .status-icon { color: var(--accent-blue); }
-        .status-error .status-icon { color: var(--error-red); }
+        .scanned-value {
+            margin-top: 15px;
+            font-size: 1.1em;
+            color: #03A9F4; /* Blue for scanned value */
+            word-break: break-all; /* For long barcodes */
+        }
+        .error-message {
+            color: #FF5252;
+            margin-top: 15px;
+        }
     </style>
 </head>
 <body>
 
     <div id="reader"></div>
-
-    <div class="status-container" id="statusContainer">
-        <i id="statusIcon" class="ri-loader-4-line status-icon"></i>
-        <p id="statusMessage">جاري الاتصال بالنظام...</p>
-    </div>
+    <p class="status-message" id="statusMessage">جاري تشغيل الماسح...</p>
+    <p class="scanned-value" id="lastScannedValue"></p>
+    <p class="error-message" id="errorMessage"></p>
 
     <script type="module">
+        // Firebase Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js";
-        import { getFirestore, doc, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
+        import { getFirestore, doc, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
 
-        // Firebase Configuration - MUST MATCH YOUR ACTUAL FIREBASE PROJECT CONFIG AND shared.js
+        // Firebase Configuration - REPLACE WITH YOUR ACTUAL FIREBASE PROJECT CONFIG
         const firebaseConfig = {
-            apiKey: "AIzaSyC5ls-rPdJ65x5BoMGwAOpdcPtD585C2ys", // يجب أن تكون هذه البيانات مطابقة لـ shared.js
+            apiKey: "AIzaSyC5ls-rPdJ65x5BoMGwAOpdcPtD585C2ys",
             authDomain: "pharmacy-inventory-bf04a.firebaseapp.com",
             projectId: "pharmacy-inventory-bf04a",
             storageBucket: "pharmacy-inventory-bf04a.firebasestorage.app",
@@ -85,97 +68,110 @@
             appId: "1:937788650384:web:6451225d00e648f3a0b915",
             measurementId: "G-ZGC9EQ55SL"
         };
+        
         // Shared Scanner Session ID - MUST MATCH IN shared.js
         const SHARED_SCANNER_SESSION_ID = "YOUR_STORE_UNIQUE_SCANNER_ID_12345"; 
         
+        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const scannerSessionDocRef = doc(db, 'scannerSessions', SHARED_SCANNER_SESSION_ID);
         
-        const statusContainer = document.getElementById('statusContainer');
-        const statusIcon = document.getElementById('statusIcon');
         const statusMessage = document.getElementById('statusMessage');
+        const lastScannedValue = document.getElementById('lastScannedValue');
+        const errorMessage = document.getElementById('errorMessage');
         const readerDiv = document.getElementById('reader');
         
         let html5QrCode;
+        let isScanning = false;
 
-        function updateStatusUI(status, message, iconClass) {
-            statusContainer.className = `status-container status-${status}`;
-            statusIcon.className = `status-icon ${iconClass}`;
+        function updateUI(message, value = '', error = '') {
             statusMessage.textContent = message;
+            lastScannedValue.textContent = value ? `آخر كود: ${value}` : '';
+            errorMessage.textContent = error;
+            statusMessage.style.color = error ? '#FF5252' : '#4CAF50';
         }
 
-        function onScanSuccess(decodedText, decodedResult) {
-            html5QrCode.stop().then(async () => {
-                readerDiv.style.display = 'none';
-                updateStatusUI('success', `تم المسح بنجاح!`, 'ri-check-line');
+        async function onScanSuccess(decodedText, decodedResult) {
+            // Stop scanner temporarily to prevent rapid re-scans of the same code
+            if (isScanning && html5QrCode.isScanning) {
+                await html5QrCode.stop().catch(err => console.error("Error stopping scanner after scan:", err));
+                isScanning = false;
+            }
+            
+            updateUI('تم المسح بنجاح!', decodedText);
+            
+            try {
+                // Update Firestore directly with the scanned value
                 await updateDoc(scannerSessionDocRef, {
-                    status: 'scanned',
+                    status: 'scanned', // Indicate that a new value has been scanned
                     scannedValue: decodedText,
-                    scannedAt: new Date()
+                    scannedAt: new Date(),
+                    // We don't need 'purpose' here, as the main app will just read the value
                 });
-            }).catch(err => {
-                console.error("Failed to stop scanner", err);
-            });
+                console.log("Firestore updated with scanned value:", decodedText);
+            } catch (e) {
+                console.error("Error updating Firestore:", e);
+                updateUI('خطأ في إرسال الكود!', decodedText, 'فشل إرسال الكود لـ Firestore.');
+            }
+
+            // After a short delay, restart the scanner to be ready for the next item
+            setTimeout(() => {
+                startScanner();
+            }, 1000); // Wait 1 second before restarting
         }
         
-        function onScanFailure(error) { /* Ignore */ }
+        function onScanFailure(error) { 
+            // This function is called frequently. Only log critical errors.
+            if (error.includes("NotReadableError") || error.includes("ConstraintNotSatisfiedError")) {
+                updateUI('خطأ في الكاميرا', '', `الخطأ: ${error}`);
+                console.error("Critical scan failure:", error);
+            }
+        }
 
         async function startScanner() {
+            if (html5QrCode && html5QrCode.isScanning) {
+                console.log("Scanner already running, not restarting.");
+                return;
+            }
+
             readerDiv.style.display = 'block';
             if (!html5QrCode) {
                 html5QrCode = new Html5Qrcode("reader");
             }
             try {
                 await html5QrCode.start(
-                    { facingMode: "environment" },
-                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    { facingMode: "environment" }, // Prefer rear camera
+                    { fps: 10, qrbox: { width: 250, height: 250 } }, // Scan settings
                     onScanSuccess,
                     onScanFailure
                 );
+                isScanning = true;
+                updateUI('الماسح جاهز وفي انتظار الكود...');
+                console.log("Scanner started successfully.");
+
+                // Set initial status in Firestore to indicate readiness
+                await setDoc(scannerSessionDocRef, { status: 'phoneReady', lastSeen: new Date() }, { merge: true });
+
             } catch (err) {
-                 updateStatusUI('error', 'لا يمكن تشغيل الكاميرا', 'ri-error-warning-line');
-                 console.error("Failed to start scanner", err);
+                 updateUI('لا يمكن تشغيل الكاميرا', '', 'تأكد من إعطاء إذن الكاميرا وعدم استخدامها من قبل تطبيق آخر.');
+                 console.error("Failed to start scanner:", err);
             }
         }
         
-        onSnapshot(scannerSessionDocRef, async (snapshot) => {
-            if (!snapshot.exists()) {
-                await setDoc(scannerSessionDocRef, { status: 'phoneReady', lastSeen: new Date() });
-                updateStatusUI('ready', 'الماسح جاهز وفي انتظار الطلب', 'ri-check-double-line');
-                return;
+        // Start scanner when the page loads
+        document.addEventListener('DOMContentLoaded', startScanner);
+
+        // Optional: Listen for page visibility to pause/resume scanner (for PWA)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                if (html5QrCode && html5QrCode.isScanning) {
+                    html5QrCode.stop().catch(err => console.error("Error stopping scanner on hide:", err));
+                    isScanning = false;
+                }
+            } else {
+                startScanner();
             }
-            
-            const data = snapshot.data();
-            switch(data.status) {
-                case 'scanRequested':
-                    const purposeText = data.purpose === 'search' ? 'للبحث' : 'لإضافة منتج';
-                    updateStatusUI('scanning', `جاري المسح ${purposeText}...`, 'ri-qr-scan-2-line animate-pulse');
-                    await updateDoc(scannerSessionDocRef, { status: 'scanning' });
-                    startScanner();
-                    break;
-                case 'readyForNextScan':
-                case 'phoneReady':
-                    readerDiv.style.display = 'none';
-                    updateStatusUI('ready', 'الماسح جاهز وفي انتظار الطلب', 'ri-check-double-line');
-                    if(html5QrCode && html5QrCode.isScanning) {
-                        html5QrCode.stop().catch(err => console.error("Error stopping scanner:", err));
-                    }
-                    break;
-                case 'scanning':
-                    // Already scanning, do nothing.
-                    break;
-                case 'scanned':
-                    // Desktop will reset status, just wait.
-                    updateStatusUI('success', 'تم إرسال الكود بنجاح!', 'ri-check-line');
-                    break;
-                default:
-                     readerDiv.style.display = 'none';
-                     updateStatusUI('ready', 'في انتظار طلبات المسح...', 'ri-time-line');
-            }
-        }, (error) => {
-            console.error("Firestore listener error:", error);
-            updateStatusUI('error', 'فشل الاتصال بالنظام', 'ri-signal-wifi-error-line');
         });
     </script>
 </body>
