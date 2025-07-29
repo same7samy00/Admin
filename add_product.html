@@ -6,7 +6,8 @@
     <title>إضافة/تعديل منتج - شيخ العرب</title>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
-    <link rel="stylesheet" href="style.css"> </head>
+    <link rel="stylesheet" href="style.css">
+</head>
 <body class="form-page-body">
     <div class="add-product-container content-wrapper">
         <div class="add-product-header page-header">
@@ -79,7 +80,6 @@
 
     <div id="notification-container"></div>
     <script type="module">
-        // استيراد الوظائف المشتركة من shared.js
         import { 
             db, 
             showNotification, 
@@ -273,9 +273,11 @@
 
         saveBtn.addEventListener('click', saveProduct);
         document.getElementById('requestScanForNewProduct').addEventListener('click', () => requestScan('add_new'));
+        
+        // هنا يتم الاستماع للماسح الضوئي وتحديث حقل الباركود
         listenToScannerSession((scannedValue, purpose) => {
             if (purpose === 'add_new' && scannedValue) {
-                fields.barcode.input.value = scannedValue;
+                fields.barcode.input.value = scannedValue; // تحديث حقل الباركود
                 showNotification(`تم استلام الباركود: ${scannedValue}`, 'success');
             }
         });
