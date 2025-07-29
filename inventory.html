@@ -186,7 +186,7 @@
             canAccessSettings,
             requestScan, 
             listenToScannerSession,
-            SCANNER_SESSION_ID // تم استيرادها
+            SCANNER_SESSION_ID 
         } from './shared.js'; 
 
         import { collection, getDocs, doc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
@@ -197,7 +197,7 @@
         const addProductBtn = document.getElementById('addProductBtn');
         const salesHistoryLink = document.getElementById('salesHistoryLink');
         const settingsLink = document.getElementById('settingsLink');
-        const openScannerSourceModalBtn = document.getElementById('openScannerSourceModalBtn'); // زر فتح المودال الجديد
+        const openScannerSourceModalBtn = document.getElementById('openScannerSourceModalBtn'); 
         const scannerSourceModalOverlay = document.getElementById('scannerSourceModalOverlay');
         const closeScannerSourceModal = document.getElementById('closeScannerSourceModal');
         const scanFromThisDeviceBtn = document.getElementById('scanFromThisDeviceBtn');
@@ -313,19 +313,20 @@
 
         scanFromThisDeviceBtn.addEventListener('click', () => {
             scannerSourceModalOverlay.classList.remove('show');
-            requestScan('search'); // طلب المسح لغرض البحث
-            // فتح نافذة الماسح على نفس الجهاز
+            requestScan('search'); 
             window.open('scanner_only.html', '_blank', 'width=450,height=550,toolbar=no,location=no,status=no,menubar=no,scrollbars=no,resizable=yes');
         });
 
         scanFromOtherDeviceBtn.addEventListener('click', () => {
             scannerSourceModalOverlay.classList.remove('show');
-            requestScan('search'); // طلب المسح لغرض البحث
-            const scannerLink = `${window.location.origin}/scanner_only.html?sessionId=${SCANNER_SESSION_ID}`; // رابط صفحة الماسح مع معرف الجلسة
+            requestScan('search'); 
+            const scannerLink = `${window.location.origin}/scanner_only.html?sessionId=${SCANNER_SESSION_ID}`; 
             showNotification(`
-                يرجى فتح الماسح على الهاتف (الجهاز الآخر) باستخدام هذا الرابط:
+                **الماسح جاهز!** يرجى فتح هذا الرابط على الهاتف (الجهاز الآخر) باستخدام هذا الرابط:
                 <br>
                 <a href="${scannerLink}" target="_blank" style="color: yellow; text-decoration: underline;">${scannerLink}</a>
+                <br>
+                **أو** افتح صفحة الماسح مباشرة إذا كانت مفتوحة بالفعل على الهاتف.
                 <br>
                 ثم قم بالمسح.
             `, "info", 10000);
@@ -336,8 +337,8 @@
         // الاستماع لنتائج المسح من Firestore
         listenToScannerSession((scannedValue, purpose) => {
             if (purpose === 'search') {
-                searchInput.value = scannedValue; // تحديث حقل البحث
-                renderProducts(); // بدء البحث
+                searchInput.value = scannedValue; 
+                renderProducts(); 
                 showNotification(`تم البحث عن: ${scannedValue}`, 'success');
                 console.log("Received barcode from scanner via Firestore:", scannedValue);
             }
@@ -363,8 +364,8 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             loadSettings(); 
-            fetchProducts(); 
-            listenToScannerSession(() => {}); // ابدأ الاستماع لجلسة الماسح الضوئي عند تحميل الصفحة
+            fetchAllProducts(); 
+            listenToScannerSession(() => {}); 
         });
 
         document.getElementById('logoutButton').addEventListener('click', () => {
