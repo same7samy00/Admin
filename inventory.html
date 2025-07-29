@@ -27,7 +27,7 @@
                 <h1>إدارة المخزون</h1>
                 <div class="action-buttons">
                     <a href="add_product.html" class="btn btn-primary" id="addProductBtn"><i class="ri-add-line"></i><span>إضافة منتج</span></a>
-                    <button class="btn btn-secondary" id="requestScanForSearchBtn"><i class="ri-qr-code-line"></i><span>مسح للبحث (بالهاتف)</span></button>
+                    <button class="btn btn-secondary" id="requestScanForSearchBtn"><i class="ri-qr-code-line"></i><span>مسح للبحث</span></button>
                 </div>
             </div>
 
@@ -97,8 +97,8 @@
             loadSettings, 
             canAccessSalesHistory, 
             canAccessSettings,
-            requestScan, // تم استيرادها
-            listenToScannerSession // تم استيرادها
+            requestScan, 
+            listenToScannerSession 
         } from './shared.js'; 
 
         import { collection, getDocs, doc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
@@ -213,6 +213,8 @@
         // ***** وظيفة طلب المسح والاستماع لـ Firestore *****
         requestScanForSearchBtn.addEventListener('click', () => {
             requestScan('search'); // طلب المسح لغرض البحث
+            // فتح نافذة الماسح هنا (سواء على نفس الجهاز أو كتذكير لفتحها على الهاتف)
+            window.open('scanner_only.html', '_blank', 'width=450,height=550,toolbar=no,location=no,status=no,menubar=no,scrollbars=no,resizable=yes');
         });
 
         // الاستماع لنتائج المسح من Firestore
@@ -247,6 +249,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadSettings(); 
             fetchProducts(); 
+            listenToScannerSession(() => {}); // ابدأ الاستماع لجلسة الماسح الضوئي عند تحميل الصفحة
         });
 
         document.getElementById('logoutButton').addEventListener('click', () => {
