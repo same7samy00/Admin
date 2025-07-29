@@ -174,7 +174,7 @@
             loadSettings,
             requestScan, 
             listenToScannerSession,
-            SCANNER_SESSION_ID // تم استيرادها
+            SCANNER_SESSION_ID 
         } from './shared.js'; 
 
         import { collection, addDoc, doc, updateDoc, getDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
@@ -183,7 +183,7 @@
         const saveBtn = document.getElementById('saveProductBtn');
         const urlParams = new URLSearchParams(window.location.search);
         const editingProductId = urlParams.get('id');
-        const openScannerSourceModalBtn = document.getElementById('openScannerSourceModalBtn'); // زر فتح المودال الجديد
+        const openScannerSourceModalBtn = document.getElementById('openScannerSourceModalBtn'); 
         const scannerSourceModalOverlay = document.getElementById('scannerSourceModalOverlay');
         const closeScannerSourceModal = document.getElementById('closeScannerSourceModal');
         const scanFromThisDeviceBtn = document.getElementById('scanFromThisDeviceBtn');
@@ -230,7 +230,7 @@
             checkInitialPermissionsAndRedirect();
             updateSaveButtonPermissions();
             loadProductForEdit();
-            listenToScannerSession(() => {}); // ابدأ الاستماع لجلسة الماسح الضوئي عند تحميل الصفحة
+            listenToScannerSession(() => {}); 
         });
 
         function validateForm() {
@@ -384,11 +384,13 @@
         scanFromOtherDeviceBtn.addEventListener('click', () => {
             scannerSourceModalOverlay.classList.remove('show');
             requestScan('add_new'); // طلب المسح لغرض إضافة منتج جديد
-            const scannerLink = `${window.location.origin}/scanner_only.html?sessionId=${SCANNER_SESSION_ID}`; // رابط صفحة الماسح مع معرف الجلسة
+            const scannerLink = `${window.location.origin}/scanner_only.html?sessionId=${SCANNER_SESSION_ID}`; 
             showNotification(`
-                يرجى فتح الماسح على الهاتف (الجهاز الآخر) باستخدام هذا الرابط:
+                **الماسح جاهز!** يرجى فتح الماسح على الهاتف (الجهاز الآخر) باستخدام هذا الرابط:
                 <br>
                 <a href="${scannerLink}" target="_blank" style="color: yellow; text-decoration: underline;">${scannerLink}</a>
+                <br>
+                **أو** افتح صفحة الماسح مباشرة إذا كانت مفتوحة بالفعل على الهاتف.
                 <br>
                 ثم قم بالمسح.
             `, "info", 10000);
