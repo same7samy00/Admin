@@ -4,16 +4,15 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebas
 import { getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-analytics.js";
 
-// Firebase Configuration - REPLACE WITH YOUR ACTUAL FIREBASE PROJECT CONFIG
-// تأكد أن هذه البيانات مطابقة تماماً لما تحصل عليه من Firebase Console
+// Firebase Configuration - تم تضمين البيانات التي قدمتها
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY", // استبدل بهذا
-    authDomain: "YOUR_AUTH_DOMAIN", // استبدل بهذا
-    projectId: "YOUR_PROJECT_ID", // استبدل بهذا
-    storageBucket: "YOUR_STORAGE_BUCKET", // استبدل بهذا
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID", // استبدل بهذا
-    appId: "YOUR_APP_ID", // استبدل بهذا
-    measurementId: "YOUR_MEASUREMENT_ID" // استبدل بهذا
+    apiKey: "AIzaSyBfgOusQjs1qj6G_92_Ecu2wjxASeO2Tko",
+    authDomain: "project-2965375871585611133.firebaseapp.com",
+    projectId: "project-2965375871585611133",
+    storageBucket: "project-2965375871585611133.firebasestorage.app",
+    messagingSenderId: "195369497927",
+    appId: "1:195369497927:web:451c349c098f2a59c18862",
+    measurementId: "G-YN2HRECRL0"
 };
 
 // Initialize Firebase
@@ -22,11 +21,9 @@ const db = getFirestore(app);
 const analytics = getAnalytics(app);
 
 // *** متغيرات خاصة بجلسة الماسح الضوئي (مهمة جداً) ***
-// يجب أن يكون هذا الـ ID فريدًا ومعروفًا لكلا الجهازين (الكمبيوتر والهاتف)
-// يمكنك تغيير هذا الـ ID إلى أي سلسلة عشوائية، فقط تأكد أنها متطابقة في جميع الملفات
 const SCANNER_SESSION_ID = "myScannerSession123"; 
 const scannerSessionDocRef = doc(db, "scannerSessions", SCANNER_SESSION_ID);
-let lastProcessedScannedValue = null; // لتجنب معالجة نفس القيمة مرتين
+let lastProcessedScannedValue = null; 
 
 // الإعدادات الافتراضية للأذونات
 let currentSettings = {
@@ -130,9 +127,10 @@ function canAccessSettings() { return currentSettings.canAccessSettings; }
 
 // *** وظائف الماسح الضوئي باستخدام Firestore ***
 
-// وظيفة لطلب المسح (تستخدمها صفحات الكمبيوتر)
+// وظيفة لطلب المسح (تستخدمها صفحات الكمبيوتر لفتح الماسح ولإرسال الغرض)
 async function requestScan(purpose) {
     try {
+        // تحديث حالة Firestore لـ "requested" لإخبار صفحة الماسح ببدء العمل
         await setDoc(scannerSessionDocRef, { 
             status: "requested", 
             purpose: purpose, 
@@ -140,36 +138,51 @@ async function requestScan(purpose) {
             scannedValue: null // مسح القيمة السابقة
         });
         console.log("Scan requested for purpose:", purpose);
-        showNotification(`الماسح جاهز. يرجى مسح الكود من هاتفك لـ ${purpose === 'search' ? 'البحث' : 'إضافة منتج'}.`, "info", 5000);
+        showNotification(`تم إرسال طلب المسح. افتح صفحة الماسح وقم بالمسح.`, "info", 5000);
+        
+        // يمكنك فتح نافذة الماسح هنا إذا كنت تتوقعها على نفس الجهاز
+        // window.open('scanner_only.html', '_blank', 'width=450,height=550,toolbar=no,location=no,status=no,menubar=no,scrollbars=no,resizable=yes');
+        
     } catch (e) {
         console.error("Error requesting scan:", e);
-        showNotification("فشل طلب المسح. تأكد من اتصال Firebase.", "error");
+        showNotification("فشل طلب المسح. تأكد من اتصال Firebase وقواعد الأمان.", "error");
     }
 }
 
-// وظيفة للاستماع إلى جلسة الماسح الضوئي (تستخدمها صفحات الكمبيوتر)
+// وظيفة للاستماع إلى جلسة الماسح الضوئي (تستخدمها صفحات الكمبيوتر لاستقبال النتائج)
 function listenToScannerSession(callback) {
     onSnapshot(scannerSessionDocRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            console.log("Scanner session data received:", data);
+            console.log("shared.js: Scanner session data received:", data);
+            
+            // إذا كانت الحالة "scanned" ولقد تم مسح قيمة جديدة
             if (data.status === "scanned" && data.scannedValue && data.scannedValue !== lastProcessedScannedValue) {
                 lastProcessedScannedValue = data.scannedValue; // تحديث القيمة المعالجة
-                callback(data.scannedValue, data.purpose);
-                // بعد المعالجة، يمكن إعادة تعيين الحالة في Firestore لتجنب التكرار
+                callback(data.scannedValue, data.purpose); // استدعاء الكولباك في الصفحة الرئيسية
+                
+                // بعد المعالجة، يتم إعادة تعيين الحالة في Firestore لتجنب التكرار
                 updateDoc(scannerSessionDocRef, { status: "processed", scannedValue: null }).catch(e => console.error("Error updating scanner session status:", e));
+            } else if (data.status === "processed" && lastProcessedScannedValue !== null) {
+                // إذا تلقينا تأكيد المعالجة، يمكننا مسح القيمة المخزنة
+                lastProcessedScannedValue = null;
+                console.log("shared.js: lastProcessedScannedValue reset.");
+            } else if (data.status === "idle" || data.status === "phoneReady") {
+                // قد لا تحتاج رسالة لكل حالة خمول إذا كانت مزعجة
+                console.log("Scanner is idle or ready.");
             }
+
         } else {
             console.log("Scanner session document does not exist. Creating a default one.");
             setDoc(scannerSessionDocRef, { status: "idle", purpose: null, timestamp: new Date(), scannedValue: null }).catch(e => console.error("Error creating default scanner session:", e));
         }
     }, (error) => {
-        console.error("Error listening to scanner session:", error);
-        showNotification("خطأ في الاستماع للماسح الضوئي.", "error");
+        console.error("shared.js: Error listening to scanner session:", error);
+        showNotification("خطأ في الاستماع للماسح الضوئي. تأكد من اتصال Firebase.", "error");
     });
 }
 
-// وظيفة لتحديث الكود الممسوح (تستخدمها صفحة الماسح الضوئي)
+// وظيفة لتحديث الكود الممسوح (تستخدمها صفحة الماسح الضوئي scanner_only.html)
 async function updateScannedValue(value, purpose) {
     try {
         await updateDoc(scannerSessionDocRef, { 
@@ -178,10 +191,10 @@ async function updateScannedValue(value, purpose) {
             purpose: purpose,
             timestamp: new Date()
         });
-        console.log("Scanned value updated in Firestore:", value);
+        console.log("Scanner updated Firestore with value:", value);
     } catch (e) {
-        console.error("Error updating scanned value in Firestore:", e);
-        showNotification("فشل إرسال الكود إلى السيرفر.", "error");
+        console.error("Scanner: Error updating scanned value in Firestore:", e);
+        // يمكنك هنا عرض رسالة خطأ للمستخدم على صفحة الماسح
     }
 }
 
@@ -198,8 +211,8 @@ export {
     canDeleteProducts, 
     canAccessSalesHistory, 
     canAccessSettings,
-    requestScan, // تم إضافتها
-    listenToScannerSession, // تم إضافتها
-    updateScannedValue, // تم إضافتها
-    SCANNER_SESSION_ID // تم إضافتها
+    requestScan, 
+    listenToScannerSession, 
+    updateScannedValue,
+    SCANNER_SESSION_ID 
 };
