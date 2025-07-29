@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إضافة/تعديل منتج - شيخ العرب</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Notification styles (copied from shared.js context) */
+        #notification-container {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .notification {
+            background-color: #333;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            min-width: 250px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .notification.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .notification.success { background-color: #4CAF50; }
+        .notification.error { background-color: #f44336; }
+        .notification.warning { background-color: #ff9800; }
+        .notification i { font-size: 1.2em; }
+    </style>
+</head>
+<body class="form-page-body">
+    <div class="add-product-container content-wrapper">
+        <div class="add-product-header page-header">
+            <h2 id="pageTitle">إضافة منتج جديد</h2>
+            <a href="inventory.html" class="close-btn btn-secondary" title="إغلاق">&times;</a>
+        </div>
+
+        <div class="form-body-container">
+            <form id="productForm" class="form-body" novalidate>
+                <div class="input-group">
+                    <label for="productName">اسم المنتج</label>
+                    <input type="text" id="productName" required>
+                    <span class="error-message" id="productNameError"></span>
+                </div>
+                <div class="input-group">
+                    <label for="productCategory">الفئة</label>
+                    <select id="productCategory" required>
+                        <option value="" disabled selected>اختر فئة...</option>
+                        <option value="بهارات">بهارات</option>
+                        <option value="حبوب">حبوب</option>
+                        <option value="أعشاب">أعشاب</option>
+                        <option value="زيوت">زيوت</option>
+                        <option value="مكسرات">مكسرات</option>
+                        <option value="عسل">عسل</option>
+                        <option value="تمور">تمور</option>
+                        <option value="بقوليات">بقوليات</option>
+                        <option value="مجففات">مجففات</option>
+                        <option value="عطور وبخور">عطور وبخور</option>
+                        <option value="أخرى">أخرى</option>
+                    </select>
+                    <span class="error-message" id="productCategoryError"></span>
+                </div>
+                <div class="input-group">
+                    <label for="productQuantity">الكمية</label>
+                    <input type="number" id="productQuantity" min="0" step="any" required>
+                    <span class="error-message" id="productQuantityError"></span>
+                </div>
+                <div class="input-group">
+                    <label for="productUnit">وحدة القياس</label>
+                    <select id="productUnit" required>
+                        <option value="جرام">جرام</option>
+                        <option value="كيلو جرام">كيلو جرام</option>
+                        <option value="قطعة">قطعة</option>
+                        <option value="لتر">لتر</option>
+                        <option value="مليلتر">مليلتر</option>
+                        <option value="عبوة">عبوة</option>
+                    </select>
+                     <span class="error-message" id="productUnitError"></span>
+                </div>
+                <div class="input-group">
+                    <label for="productPricePerUnit">سعر الوحدة (جنيه)</label>
+                    <input type="number" id="productPricePerUnit" min="0" step="any" required>
+                    <span class="error-message" id="productPricePerUnitError"></span>
+                </div>
+                <div class="input-group barcode-group">
+                    <label for="productBarcode">كود المنتج (Barcode/QR)</label>
+                    <div class="input-with-button">
+                        <input type="text" id="productBarcode" placeholder="أدخل الكود أو امسحه">
+                        <button type="button" class="btn btn-icon btn-secondary" id="requestScanForNewProduct" title="مسح QR"><i class="ri-qr-code-line"></i></button>
+                    </div>
+                     <span class="error-message" id="productBarcodeError"></span>
+                </div>
+            </form>
+            <div class="form-footer action-buttons">
+                <a href="inventory.html" class="btn btn-secondary">إلغاء</a>
+                <button type="button" class="btn btn-primary" id="saveProductBtn">حفظ المنتج</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification-container"></div>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, doc, updateDoc, getDoc, getDocs, query, where, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+
+        // Firebase Configuration (from original script block)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBfgOusQjs1qj6G_92_Ecu2wjxASeO2Tko",
+            authDomain: "project-2965375871585611133.firebaseapp.com",
+            projectId: "project-2965375871585611133",
+            storageBucket: "project-2965375871585611133.firebasestorage.app",
+            messagingSenderId: "195369497927",
+            appId: "1:195369497927:web:451c349c098f2a59c18862",
+            measurementId: "G-YN2HRECRL0"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const SHARED_SCANNER_SESSION_ID = "YOUR_STORE_UNIQUE_SCANNER_ID_12345"; // Same ID as in qr_scanner.html
+        const scannerSessionDocRef = doc(db, 'scannerSessions', SHARED_SCANNER_SESSION_ID);
+
+        // Global settings for permissions (initially default, updated by Firestore)
+        let currentSettings = {
+            canAddProducts: true,
+            canEditProducts: true,
+            canDeleteProducts: true,
+            canAccessSalesHistory: true,
+            canAccessSettings: true
+        };
+
+        // Function to show notifications (copied from shared.js)
+        function showNotification(message, type = 'info', duration = 3000) {
+            const container = document.getElementById('notification-container');
+            if (!container) return;
+
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            let iconClass = '';
+            if (type === 'success') iconClass = 'ri-check-line';
+            else if (type === 'error') iconClass = 'ri-error-warning-line';
+            else if (type === 'warning') iconClass = 'ri-alert-line';
+            else iconClass = 'ri-information-line';
+
+            notification.innerHTML = `<i class="${iconClass}"></i><span>${message}</span>`;
+
+            container.appendChild(notification);
+
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 10);
+
+            setTimeout(() => {
+                notification.classList.remove('show');
+                notification.addEventListener('transitionend', () => notification.remove());
+            }, duration);
+        }
+
+        // Permission Checkers (copied from shared.js)
+        function canAddProducts() { return currentSettings.canAddProducts; }
+        function canEditProducts() { return currentSettings.canEditProducts; }
+
+        // Load settings from Firestore (copied and adapted from shared.js)
+        function loadSettings() {
+            const settingsDocRef = doc(db, 'settings', 'userPermissions');
+            onSnapshot(settingsDocRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    currentSettings = { ...currentSettings, ...docSnap.data() };
+                    console.log("Settings updated:", currentSettings);
+                    // Re-check permissions after settings are loaded/updated
+                    checkInitialPermissions(); 
+                    updateSaveButtonPermissions(); // Update save button state
+                } else {
+                    console.warn("No user permissions settings found. Using default.");
+                    // If no settings document, maybe create one with defaults
+                    setDoc(settingsDocRef, currentSettings, { merge: true });
+                }
+            }, (error) => {
+                console.error("Error listening to settings:", error);
+                showNotification("خطأ في تحميل الإعدادات.", "error");
+            });
+        }
+
+        // Scanner session logic (copied and adapted from shared.js)
+        let scannerSessionListenerUnsubscribe = null;
+
+        function listenToScannerSession(callback) {
+            if (scannerSessionListenerUnsubscribe) {
+                scannerSessionListenerUnsubscribe(); // Unsubscribe from previous listener
+            }
+            scannerSessionListenerUnsubscribe = onSnapshot(scannerSessionDocRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    if (data.status === 'scanned' && data.scannedValue) {
+                        callback(data.scannedValue, data.purpose);
+                        // Reset status after processing to allow next scan
+                        updateDoc(scannerSessionDocRef, {
+                            status: 'readyForNextScan',
+                            scannedValue: null,
+                            purpose: null
+                        }).catch(e => console.error("Error resetting scanner status:", e));
+                    }
+                }
+            }, (error) => {
+                console.error("Error listening to scanner session:", error);
+                showNotification("خطأ في الاتصال بالماسح الضوئي.", "error");
+            });
+        }
+
+        async function requestScan(purpose) {
+            try {
+                await setDoc(scannerSessionDocRef, {
+                    status: 'scanRequested',
+                    purpose: purpose,
+                    requestedAt: new Date()
+                }, { merge: true });
+                showNotification("تم إرسال طلب المسح الضوئي إلى جهاز QR.", "info");
+                // Optionally, open qr_scanner.html in a new tab if it's not already open
+                // window.open('qr_scanner.html', '_blank'); 
+            } catch (e) {
+                console.error("Error requesting scan:", e);
+                showNotification("فشل إرسال طلب المسح الضوئي.", "error");
+            }
+        }
+
+        const pageTitle = document.getElementById('pageTitle');
+        const saveBtn = document.getElementById('saveProductBtn');
+        const urlParams = new URLSearchParams(window.location.search);
+        const editingProductId = urlParams.get('id');
+
+        const fields = {
+            name: { input: document.getElementById('productName'), error: document.getElementById('productNameError') },
+            category: { input: document.getElementById('productCategory'), error: document.getElementById('productCategoryError') },
+            quantity: { input: document.getElementById('productQuantity'), error: document.getElementById('productQuantityError') },
+            pricePerUnit: { input: document.getElementById('productPricePerUnit'), error: document.getElementById('productPricePerUnitError') },
+            unit: { input: document.getElementById('productUnit'), error: document.getElementById('productUnitError') },
+            barcode: { input: document.getElementById('productBarcode'), error: document.getElementById('productBarcodeError') }
+        };
+
+        function checkInitialPermissions() {
+            if (editingProductId && !canEditProducts()) {
+                showNotification("ليس لديك صلاحية لتعديل المنتجات.", "error");
+                setTimeout(() => window.location.href = 'inventory.html', 1500);
+            } else if (!editingProductId && !canAddProducts()) {
+                showNotification("ليس لديك صلاحية لإضافة منتجات.", "error");
+                setTimeout(() => window.location.href = 'inventory.html', 1500);
+            }
+        }
+
+        function updateSaveButtonPermissions() {
+            if (editingProductId && !canEditProducts()) {
+                saveBtn.disabled = true;
+                showNotification("ليس لديك صلاحية لتعديل المنتجات. لا يمكن حفظ التغييرات.", "error");
+            } else if (!editingProductId && !canAddProducts()) {
+                saveBtn.disabled = true;
+                showNotification("ليس لديك صلاحية لإضافة منتجات. لا يمكن حفظ المنتج.", "error");
+            } else {
+                saveBtn.disabled = false; // Enable if permissions are met
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSettings(); // Start listening to settings updates
+            checkInitialPermissions(); // Check permissions on initial load based on default or first loaded settings
+            updateSaveButtonPermissions(); // Initial update for save button
+        });
+
+        function validateForm() {
+            let isValid = true;
+            Object.values(fields).forEach(f => {
+                if(f.error) f.error.textContent = '';
+                if(f.input.required && (!f.input.value || f.input.value.trim() === '')){
+                    isValid = false;
+                    f.error.textContent = 'هذا الحقل مطلوب.';
+                }
+            });
+            if (parseFloat(fields.quantity.input.value) < 0) {
+                isValid = false;
+                fields.quantity.error.textContent = 'الكمية لا يمكن أن تكون سالبة.';
+            }
+            if (parseFloat(fields.pricePerUnit.input.value) < 0) {
+                isValid = false;
+                fields.pricePerUnit.error.textContent = 'السعر لا يمكن أن يكون سالباً.';
+            }
+
+            return isValid;
+        }
+
+        async function saveProduct() {
+            if (!validateForm()) {
+                showNotification("يرجى ملء الحقول المطلوبة بشكل صحيح.", "warning");
+                return;
+            }
+
+            if (editingProductId && !canEditProducts()) {
+                showNotification("ليس لديك صلاحية لتعديل المنتجات.", "error");
+                return;
+            } else if (!editingProductId && !canAddProducts()) {
+                showNotification("ليس لديك صلاحية لإضافة منتجات.", "error");
+                return;
+            }
+
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'جاري الحفظ...';
+
+            const name = fields.name.input.value.trim();
+            const barcode = fields.barcode.input.value.trim() || null;
+
+            const productsRef = collection(db, "products");
+            const nameQuery = query(productsRef, where("name", "==", name));
+            const barcodeQuery = barcode ? query(productsRef, where("barcode", "==", barcode)) : null;
+
+            const [nameSnapshot, barcodeSnapshot] = await Promise.all([
+                getDocs(nameQuery),
+                barcodeQuery ? getDocs(barcodeQuery) : Promise.resolve({ docs: [] })
+            ]);
+
+            const nameIsDuplicate = nameSnapshot.docs.some(doc => doc.id !== editingProductId);
+            if (nameIsDuplicate) {
+                showNotification("اسم المنتج هذا موجود بالفعل.", "error");
+                fields.name.error.textContent = "اسم المنتج هذا موجود بالفعل.";
+                saveBtn.disabled = false;
+                saveBtn.textContent = editingProductId ? 'حفظ التعديلات' : 'حفظ المنتج';
+                return;
+            }
+
+            const barcodeIsDuplicate = barcodeSnapshot.docs.some(doc => doc.id !== editingProductId);
+            if (barcodeIsDuplicate) {
+                showNotification("هذا الباركود موجود بالفعل لمنتج آخر.", "error");
+                fields.barcode.error.textContent = "هذا الباركود موجود بالفعل لمنتج آخر.";
+                saveBtn.disabled = false;
+                saveBtn.textContent = editingProductId ? 'حفظ التعديلات' : 'حفظ المنتج';
+                return;
+            }
+
+            const quantity = parseFloat(fields.quantity.input.value);
+            let status = 'متوفر';
+            if (quantity <= 0) status = 'نفد المخزون';
+            else if (quantity > 0 && quantity <= 10) status = 'قليل المخزون';
+
+            const productData = {
+                name: name,
+                category: fields.category.input.value,
+                quantity: quantity,
+                unit: fields.unit.input.value,
+                pricePerUnit: parseFloat(fields.pricePerUnit.input.value),
+                barcode: barcode,
+                status: status,
+                updatedAt: new Date()
+            };
+
+            try {
+                if (editingProductId) {
+                    const productRef = doc(db, "products", editingProductId);
+                    await updateDoc(productRef, productData);
+                    showNotification('تم تحديث المنتج بنجاح!', 'success');
+                } else {
+                    productData.createdAt = new Date();
+                    await addDoc(collection(db, "products"), productData);
+                    showNotification('تم إضافة المنتج بننجاح!', 'success');
+                }
+                setTimeout(() => window.location.href = 'inventory.html', 1500);
+            } catch (e) {
+                console.error("Error saving product: ", e);
+                showNotification('فشل حفظ المنتج.', 'error');
+                saveBtn.disabled = false;
+                saveBtn.textContent = editingProductId ? 'حفظ التعديلات' : 'حفظ المنتج';
+            }
+        }
+
+        async function loadProductForEdit() {
+            if (!editingProductId) return;
+
+            pageTitle.textContent = 'تعديل المنتج';
+            saveBtn.textContent = 'حفظ التعديلات';
+
+            // Permission check for the button should be handled by updateSaveButtonPermissions
+
+            try {
+                const docRef = doc(db, "products", editingProductId);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    const product = docSnap.data();
+                    fields.name.input.value = product.name || '';
+                    fields.category.input.value = product.category || '';
+                    fields.quantity.input.value = product.quantity === undefined ? '' : product.quantity;
+                    fields.unit.input.value = product.unit || 'جرام';
+                    fields.pricePerUnit.input.value = product.pricePerUnit === undefined ? '' : product.pricePerUnit;
+                    fields.barcode.input.value = product.barcode || '';
+                } else {
+                    showNotification("المنتج غير موجود.", "error");
+                    setTimeout(() => window.location.href = 'inventory.html', 1500);
+                }
+            } catch (e) {
+                console.error("Error loading product:", e);
+                showNotification("خطأ في تحميل بيانات المنتج.", "error");
+            }
+        }
+
+        saveBtn.addEventListener('click', saveProduct);
+        document.getElementById('requestScanForNewProduct').addEventListener('click', () => requestScan('add_new'));
+        listenToScannerSession((scannedValue, purpose) => {
+            if (purpose === 'add_new' && scannedValue) {
+                fields.barcode.input.value = scannedValue;
+                showNotification(`تم استلام الباركود: ${scannedValue}`, 'success');
+            }
+        });
+
+        loadProductForEdit(); // Load product data if in edit mode
+    </script>
+</body>
+</html>
