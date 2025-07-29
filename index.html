@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مرحباً بك في شيخ العرب</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: #f0f4f8; /* لون خلفية فاتح يتناسب مع التصميم */
+            color: #2c3e50; /* لون نص داكن */
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            text-align: center;
+            direction: rtl; /* لضمان الاتجاه من اليمين لليسار */
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .container {
+            background-color: #ffffff;
+            padding: 40px 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        .logo {
+            font-size: 2.8em;
+            font-weight: 700;
+            color: #03a9f4; /* لون أزرق جذاب */
+            margin-bottom: 20px;
+        }
+
+        .logo span {
+            color: #2c3e50;
+        }
+
+        h1 {
+            font-size: 1.8em;
+            margin-bottom: 25px;
+            color: #333;
+        }
+
+        .btn {
+            display: inline-block;
+            background-color: #03a9f4; /* نفس اللون الأزرق الرئيسي */
+            color: #ffffff;
+            padding: 12px 25px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 10px rgba(3, 169, 244, 0.3);
+        }
+
+        .btn:hover {
+            background-color: #0288d1; /* أغمق قليلاً عند التحويم */
+            transform: translateY(-2px);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">شيخ <span>العرب</span></div>
+        <h1>مرحباً بك في نظام إدارة مخزون شيخ العرب</h1>
+        <a href="inventory.html" class="btn">الانتقال إلى إدارة المخزون</a>
+    </div>
+</body>
+</html>
