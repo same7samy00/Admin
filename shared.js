@@ -1,12 +1,10 @@
 // shared.js
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js";
-// تأكد من استيراد getDoc هنا بالإضافة إلى باقي الوظائف
 import { getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-analytics.js";
 
 // Firebase Configuration - REPLACE WITH YOUR ACTUAL FIREBASE PROJECT CONFIG
-// هذه البيانات يجب أن تكون مطابقة تماماً لبيانات مشروعك الحقيقي في Firebase
 const firebaseConfig = {
     apiKey: "AIzaSyBfgOusQjs1qj6G_92_Ecu2wjxASeO2Tko",
     authDomain: "project-2965375871585611133.firebaseapp.com",
@@ -128,7 +126,7 @@ function canAccessSettings() { return currentSettings.canAccessSettings; }
 
 // منطق جلسة الماسح الضوئي (يتفاعل مع scanner_only.html الجديد)
 let scannerSessionListenerUnsubscribe = null;
-let lastKnownScannedValue = null; // لتتبع آخر قيمة ممسوحة ومنع التكرار
+let lastProcessedScannedValue = null; // لتتبع آخر قيمة تم معالجتها بشكل فعال
 
 function listenToScannerSession(callback) {
     if (scannerSessionListenerUnsubscribe) {
@@ -137,20 +135,43 @@ function listenToScannerSession(callback) {
     scannerSessionListenerUnsubscribe = onSnapshot(scannerSessionDocRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
+            
             // تحقق مما إذا كانت الحالة "scanned" ولقد تم مسح قيمة جديدة
-            if (data.status === 'scanned' && data.scannedValue && data.scannedValue !== lastKnownScannedValue) {
-                lastKnownScannedValue = data.scannedValue; // تحديث آخر قيمة معروفة
-                callback(data.scannedValue, data.purpose); // 'purpose' سيأتي من requestScan
-                
-                // إعادة تعيين الحالة في Firestore بعد المعالجة للسماح بمسح جديد
-                // هذا مهم لضمان أن التغييرات المستقبلية في الماسح الضوئي سيتم اكتشافها
-                updateDoc(scannerSessionDocRef, {
-                    status: 'readyForNextScan',
-                    scannedValue: null, // مسح القيمة الممسوحة القديمة
-                    purpose: null
-                }).catch(e => console.error("Error resetting scanner status in Firestore:", e));
+            // ونقوم بالتحقق من أن القيمة ليست هي نفسها التي تم معالجتها آخر مرة
+            // يتم أيضاً التحقق من أن القيمة الممسوحة ليست null/undefined
+            if (data.status === 'scanned' && data.scannedValue !== null && data.scannedValue !== undefined) {
+                // إذا كانت القيمة مختلفة عن آخر قيمة تمت معالجتها
+                if (data.scannedValue !== lastProcessedScannedValue) {
+                    console.log("New scanned value detected:", data.scannedValue); // للمساعدة في التتبع
+                    lastProcessedScannedValue = data.scannedValue; // تحديث آخر قيمة تم معالجتها
+
+                    // استدعاء الـ callback مع القيمة الممسوحة والغرض
+                    callback(data.scannedValue, data.purpose); 
+                    
+                    // إعادة تعيين الحالة في Firestore بعد المعالجة للسماح بمسح جديد
+                    // هذا مهم لضمان أن التغييرات المستقبلية في الماسح الضوئي سيتم اكتشافها
+                    updateDoc(scannerSessionDocRef, {
+                        status: 'readyForNextScan', // إعادة تعيين الحالة
+                        scannedValue: null,          // مسح القيمة الممسوحة القديمة
+                        purpose: null                // مسح الغرض القديم
+                    }).then(() => {
+                        console.log("Scanner session status reset to readyForNextScan in Firestore.");
+                        // لا داعي لمسح lastProcessedScannedValue هنا، سيتم مسحه عندما يتم تغيير حالته في Firestore
+                    }).catch(e => console.error("Error resetting scanner status in Firestore:", e));
+                } else {
+                    console.log("Scanned value is the same as last processed, ignoring.", data.scannedValue);
+                    // إذا كانت نفس القيمة، لكنها لا تزال 'scanned'، قد يعني أن إعادة التعيين لم تحدث بعد
+                    // يمكننا محاولة إعادة التعيين مرة أخرى لضمان الاستمرارية
+                    if (data.status === 'scanned') {
+                        updateDoc(scannerSessionDocRef, {
+                            status: 'readyForNextScan',
+                            scannedValue: null,
+                            purpose: null
+                        }).catch(e => console.error("Error re-resetting scanner status:", e));
+                    }
+                }
+
             } else if (data.status === 'phoneReady') {
-                // إذا كان الماسح الضوئي أصبح جاهزًا بعد أن كان غير متصل
                 showNotification("الماسح الضوئي متصل وجاهز للاستخدام.", "info", 3000);
             }
         }
@@ -168,10 +189,13 @@ function listenToScannerSession(callback) {
 async function requestScan(purpose) {
     try {
         // تحديث الغرض في مستند الجلسة.
-        // لا نتحقق من حالة الماسح الضوئي هنا، الماسح الضوئي سيعمل باستمرار.
         await updateDoc(scannerSessionDocRef, {
             purpose: purpose,
-            requestedAt: new Date()
+            requestedAt: new Date(),
+            // نضع حالة "طلب المسح" هنا، ليس لطلب بدء المسح، ولكن لإعطاء إشارة للماسح
+            // بأنه يجب أن يكون مستعدًا لإرسال الكود مع هذا الغرض.
+            // الماسح الضوئي نفسه (scanner_only.html) يعمل بشكل مستمر.
+            status: 'scanRequested' 
         });
         showNotification(`تم تعيين غرض المسح إلى: ${purpose}. امسح الكود الآن على جهاز الماسح.`, "info", 4000);
     } catch (e) {
